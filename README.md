@@ -11,6 +11,20 @@ APIs using FastAPI.
 ## Setup
 ```bash
 python -m venv .venv
-source .venv\Scripts\activate  # Mac: .venv/bin/activate
+source .venv/bin/activate # Mac/Linux 
+.venv/Scripts/activate #Windows
 pip install -r requirements.txt
+```
+
+## Running Tests 
+To run all unit tests, enter the virtual environment: 
+```bash
+source .venv/bin/activate   # Mac/Linux
+.venv\Scripts\activate     # Windows
+```
+Then run 
+```
+python -m pytest
+```
+
 
