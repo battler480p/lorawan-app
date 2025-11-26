@@ -4,9 +4,9 @@ This repo contains the application module for the S26-15 LoRaWAN Sensor System M
 APIs using FastAPI.
 
 ## Requirements 
--Python 3.10+
--Virtual environment (.venv)
--pip 
+- Python 3.10+
+- Virtual environment (.venv)
+- pip 
 
 ## Setup
 ```bash
