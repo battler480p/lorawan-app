@@ -11,6 +11,6 @@ APIs using FastAPI.
 ## Setup
 ```bash
 python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
+source .venv\Scripts\activate  # Mac: .venv/bin/activate
 pip install -r requirements.txt
 
