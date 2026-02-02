@@ -57,18 +57,6 @@ class DataStore:
         conn.commit()
         conn.close()
 
-    # @classmethod
-    # def save_readings(cls, readings: list[SensorReading]) -> None:
-    #     conn = cls._get_conn()
-    #     cur = conn.cursor()
-
-    #     cur.execute("""
-    #         INSERT INTO sensor_readings(device_id, sensor_name, value, unit, measured_at)
-    #         VALUES (?, ?, ?, ?, ?)
-    #     """, (device_id, sensor_name, value, unit, measured_at.isoformat()))
-
-    #     conn.commit()
-    #     conn.close() 
     
 
     @classmethod
