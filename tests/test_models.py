@@ -14,6 +14,7 @@ from app.models import (
 def test_uplink_message_valid():
     msg = UplinkMessage(
         device_id="node-1",
+        fport = 1,
         decoded={"temperature_c": 22.5},
         raw_b64="AAEC",
         received_at=datetime.now()

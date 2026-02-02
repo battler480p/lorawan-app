@@ -5,6 +5,7 @@ from typing import Optional, Dict, Any, List
 #Internal models 
 class UplinkMessage(BaseModel):
     device_id: str 
+    fport: int
     decoded: Optional[Dict[str, Any]] = None
     seq: Optional[int] = None 
     raw_b64: Optional[str] = None 
