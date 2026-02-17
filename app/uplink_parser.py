@@ -5,15 +5,19 @@ from app.models import SensorReading, UplinkMessage
 
 
 class UplinkParser:
-    
+    #current sensors, some are going to be changed, added or whatever! 
     SENSORS = {
-        "temperature": ("temperature", "C"),
-        "humidity": ("humidity", "%"),
-        "pressure": ("pressure", "hPa"),
-        "sunlight": ("sunlight", "lux"),
-        "wind_direction": ("wind_direction", "deg"),
-        "wind_speed": ("wind_speed", "km/h"),
-        "battery": ("battery", "mV"),
+        "temperature_c": ("temperature", "C"),
+        "humidity_percent": ("humidity", "%"),
+        "accel_x_g": ("accel_x", "g"),
+        "accel_y_g": ("accel_y", "g"),
+        "accel_z_g": ("accel_z", "g"),
+        "charge_C": ("charge", "C"),
+       # "pressure": ("pressure", "hPa"),
+       # "sunlight": ("sunlight", "lux"),
+       # "wind_direction": ("wind_direction", "deg"),
+       # "wind_speed": ("wind_speed", "km/h"),
+       # "battery": ("battery", "mV"),
 
     }
 
@@ -26,8 +30,8 @@ class UplinkParser:
             um = raw_json["uplink_message"]
             fport = um["f_port"]
             b64_payload = um["frm_payload"]
-            decoded_payload = um["decoded_payload"]
-            received_at = um["received_at"]
+            decoded_payload = um.get("decoded_payload", {})
+            received_at = raw_json.get("received_at") or um.get("received_at")
         except KeyError:
             return None
         
@@ -65,6 +69,34 @@ class UplinkParser:
                 readings.append(reading)
         
         return readings
+
+
+    @staticmethod
+    def check_errors(decoded_payload):
+       
+        if "error" in decoded_payload:
+            return "decoder_error"
+
+        packet_type = decoded_payload.get("packet_type")
+        if packet_type == "unknown":
+            return "unknown_packet"
+
+        return None
+
+
+
+
+        
+
+
+
+
+
+
+
+
+
+
 
 
 

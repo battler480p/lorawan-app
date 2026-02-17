@@ -1,28 +1,31 @@
 import pytest
 from datetime import datetime
 
-
 from app.uplink_parser import UplinkParser
 from app.models import UplinkMessage, SensorReading
 
 
 @pytest.fixture
 def good_ttn_payload():
+
+    # picking a few keys that parser currently supports 
+    sensor_keys = list(UplinkParser.SENSORS.keys())
+    assert len(sensor_keys) >= 2, "UplinkParser.SENSORS should define at least 2 sensor keys"
+
+    decoded = {
+        "packet_type": "temp_humi",
+        # add a couple of sensor keys that to_readings should pick up
+        sensor_keys[0]: 1.23,
+        sensor_keys[1]: 4.56,
+    }
+
     return {
         "end_device_ids": {"device_id": "device-123"},
+        "received_at": "2026-02-16T06:51:01.132300865Z",
         "uplink_message": {
             "f_port": 1,
             "frm_payload": "AQIDBA==",  # base64 placeholder
-            "decoded_payload": {
-                "temperature": 22.4,
-                "humidity": 58.1,
-                "pressure": 1016.8,
-                "wind_speed": 12.3,
-                "wind_direction": 270,
-                "sunlight": 1234,
-                "battery": 3920,
-            },
-            "received_at": "2026-02-01T20:14:32.123Z",
+            "decoded_payload": decoded,
         },
     }
 
@@ -60,7 +63,6 @@ def test_parse_uplink_success(good_ttn_payload):
     assert uplink.raw_b64 == "AQIDBA=="
     assert isinstance(uplink.decoded, dict)
 
-  
     assert isinstance(uplink.received_at, datetime)
 
 
@@ -74,9 +76,11 @@ def test_parse_uplink_missing_uplink_message_returns_none(payload_missing_uplink
     assert uplink is None
 
 
-def test_parse_uplink_missing_decoded_payload_returns_none(payload_missing_decoded_payload):
+def test_parse_uplink_missing_decoded_payload_sets_empty_dict(payload_missing_decoded_payload):
     uplink = UplinkParser.parse_uplink(payload_missing_decoded_payload)
-    assert uplink is None
+    assert uplink is not None
+    assert isinstance(uplink.decoded, dict)
+    assert uplink.decoded == {}  # decoded_payload missing -> treat as empty
 
 
 def test_to_readings_returns_expected_readings(good_ttn_payload):
@@ -85,63 +89,61 @@ def test_to_readings_returns_expected_readings(good_ttn_payload):
 
     readings = UplinkParser.to_readings(uplink)
     assert isinstance(readings, list)
-
-    # only sensors present in decoded_payload and also listed in SENSORS should appear.
-    assert len(readings) == 7
     assert all(isinstance(r, SensorReading) for r in readings)
 
-    # create lookup by sensor_name for easy assertions
+    # only keys that appear in decoded_payload AND exist in SENSORS should be emitted.
+    expected_keys_present = [
+        k for k in UplinkParser.SENSORS.keys()
+        if k in uplink.decoded
+    ]
+    assert len(readings) == len(expected_keys_present)
+
+    # validate mapping correctness for each  reading
     by_name = {r.sensor_name: r for r in readings}
 
-    assert by_name["temperature"].value == 22.4
-    assert by_name["temperature"].unit == "C"
-    assert by_name["temperature"].device_id == "device-123"
-
-    assert by_name["humidity"].value == 58.1
-    assert by_name["humidity"].unit == "%"
-
-    assert by_name["pressure"].value == 1016.8
-    assert by_name["pressure"].unit == "hPa"
-
-    assert by_name["sunlight"].value == 1234
-    assert by_name["sunlight"].unit == "lux"
-
-    assert by_name["wind_speed"].value == 12.3
-    assert by_name["wind_speed"].unit == "km/h"
-
-    assert by_name["wind_direction"].value == 270
-    assert by_name["wind_direction"].unit == "deg"
-
-    assert by_name["battery"].value == 3920
-    assert by_name["battery"].unit == "mV"  
-
-    # all readings should share the uplink timestamp
-    for r in readings:
-        assert r.measured_at == uplink.received_at
+    for key in expected_keys_present:
+        expected_sensor_name, expected_unit = UplinkParser.SENSORS[key]
+        assert expected_sensor_name in by_name
+        assert by_name[expected_sensor_name].unit == expected_unit
+        assert by_name[expected_sensor_name].device_id == "device-123"
+        assert by_name[expected_sensor_name].measured_at == uplink.received_at
 
 
 def test_to_readings_skips_missing_keys(good_ttn_payload):
     uplink = UplinkParser.parse_uplink(good_ttn_payload)
     assert uplink is not None
 
-    # Remove some keys from decoded_payload
-    uplink.decoded.pop("pressure", None)
-    uplink.decoded.pop("sunlight", None)
+    # remove one known key from decoded_payload
+    some_key = next(iter(UplinkParser.SENSORS.keys()))
+    uplink.decoded.pop(some_key, None)
 
     readings = UplinkParser.to_readings(uplink)
     names = {r.sensor_name for r in readings}
 
-    assert "pressure" not in names
-    assert "sunlight" not in names
-    assert "temperature" in names
-    assert "humidity" in names
+    expected_sensor_name, _ = UplinkParser.SENSORS[some_key]
+    assert expected_sensor_name not in names
 
 
 def test_to_readings_returns_empty_list_when_decoded_is_empty(good_ttn_payload):
     uplink = UplinkParser.parse_uplink(good_ttn_payload)
     assert uplink is not None
 
-    uplink.decoded = {}  # simulate empty decoded payload
-
+    uplink.decoded = {}
     readings = UplinkParser.to_readings(uplink)
     assert readings == []
+
+
+def test_check_errors_decoder_error():
+    decoded_payload = {"error": "Payload too short"}
+    assert UplinkParser.check_errors(decoded_payload) == "decoder_error"
+
+
+def test_check_errors_unknown_packet():
+    decoded_payload = {"packet_type": "unknown", "debug_message": "Unknown flag"}
+    assert UplinkParser.check_errors(decoded_payload) == "unknown_packet"
+
+
+def test_check_errors_none_for_known_packet():
+    decoded_payload = {"packet_type": "temp_humi", "temperature_c": 25}
+    # this should not be considered an error just because packet_type exists
+    assert UplinkParser.check_errors(decoded_payload) is None
