@@ -240,8 +240,41 @@ class DataStore:
         ]
 
 
+    @classmethod
+    def get_device_sensor_readings(cls, device_id: str, sensor_name: str, limit: int = 100):
+            conn = cls._get_conn()
+            cur = conn.cursor()
+            query = """
+                    SELECT device_id, 
+                    sensor_name, 
+                    value,
+                    unit, 
+                    measured_at
+                    FROM sensor_readings
+                    WHERE device_id = ?
+                    AND sensor_name = ? 
+                    ORDER BY measured_at DESC 
+                    LIMIT ?
+                    """
+            cur.execute(query, (device_id, sensor_name, limit))
+            rows = cur.fetchall()
+            conn.close()
 
-    
+
+            
+            return [
+                SensorReading(
+                    device_id=row["device_id"],
+                    sensor_name=row["sensor_name"],
+                    value=row["value"],
+                    unit=row["unit"],
+                    measured_at=row["measured_at"]
+                ) 
+                for row in rows
+            ]
+
+
+        
 
 
 
