@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 
 from app.datastore import DataStore
 from app.uplink_parser import UplinkParser
+from app.models import SensorReading
 
 
 @pytest.fixture
@@ -118,7 +119,7 @@ def test_save_sensor_readings_inserts_rows(test_db, good_ttn_payload):
     assert uplink is not None
 
     readings = UplinkParser.to_readings(uplink)
-    assert readings  # should not be empty for this fixture
+    assert readings 
 
     DataStore.save_readings(readings)
 
@@ -144,6 +145,159 @@ def test_save_sensor_readings_inserts_rows(test_db, good_ttn_payload):
         expected_ts = uplink.received_at.isoformat()
         for row in rows:
             assert row[4] == expected_ts
+
+
+
+def test_get_devices_returns_unique_devices_in_last_seen_order(test_db):
+    # device-A appears, then device-B appears, then device-A again.
+    DataStore.save_raw_only("ok", {"msg": 1}, device_id="device-A")
+    DataStore.save_raw_only("ok", {"msg": 2}, device_id="device-B")
+    DataStore.save_raw_only("ok", {"msg": 3}, device_id="device-A")
+
+    devices = DataStore.get_devices()
+
+    # unique and ordered by last seen (device-A was last inserted)
+    assert devices[0] == "device-A"
+    assert "device-B" in devices
+    assert len(devices) == 2
+
+
+def test_get_device_readings(tmp_path, monkeypatch, good_ttn_payload):
+    test_db = tmp_path / "test_data.db"
+    monkeypatch.setattr(DataStore, "DB_PATH", test_db)
+
+    DataStore.init_db()
+
+    uplink = UplinkParser.parse_uplink(good_ttn_payload)
+    assert uplink is not None
+
+    readings = UplinkParser.to_readings(uplink)
+    assert readings
+
+    DataStore.save_readings(readings)
+
+    retrieved = DataStore.get_device_readings("device-123", 4)
+
+    assert len(retrieved) == len(readings)
+
+    assert all(isinstance(r, SensorReading) for r in retrieved)
+
+    assert all(r.device_id == "device-123" for r in retrieved)
+
+    by_name = {r.sensor_name: r for r in retrieved}
+
+    assert by_name["temperature"].value == 22.4
+    assert by_name["temperature"].unit == "C"
+
+
+def test_get_device_readings_and_limit(tmp_path, monkeypatch, good_ttn_payload):
+    test_db = tmp_path / "test_data.db"
+    monkeypatch.setattr(DataStore, "DB_PATH", test_db)
+
+    DataStore.init_db()
+    uplink = UplinkParser.parse_uplink(good_ttn_payload)
+    assert uplink is not None
+
+    readings = UplinkParser.to_readings(uplink)
+    assert readings
+
+    DataStore.save_readings(readings)
+
+    limit = 4
+    retrieved = DataStore.get_device_readings("device-123", limit)
+
+    assert len(retrieved) == min(len(readings), limit)
+    assert all(isinstance(r, SensorReading) for r in retrieved)
+    assert all(r.device_id == "device-123" for r in retrieved)
+
+    by_name = {r.sensor_name: r for r in retrieved}
+    assert by_name["temperature"].value == 22.4
+    assert by_name["temperature"].unit == "C"
+
+def test_get_device_raw_payloads_filters_by_device_and_orders_desc(test_db):
+    # insert payloads in a known order across two devices
+    DataStore.save_raw_only("ok", {"n": 1}, device_id="device-A", payload_b64="AAA=")
+    DataStore.save_raw_only("ok", {"n": 2}, device_id="device-B", payload_b64="BBB=")
+    DataStore.save_raw_only("decoder_error", {"n": 3}, device_id="device-A", payload_b64="CCC=")
+
+    rows = DataStore.get_device_raw_payloads("device-A", limit=50)
+
+    # should only return device-A rows (2 of them)
+    assert len(rows) == 2
+    assert all(isinstance(r, dict) for r in rows)
+
+    # should be ordered newest-first, so the last inserted for device-A comes first
+    assert rows[0]["decode_status"] == "decoder_error"
+    assert rows[0]["payload_b64"] == "CCC="
+    assert json.loads(rows[0]["raw_json"])["n"] == 3
+
+    assert rows[1]["decode_status"] == "ok"
+    assert rows[1]["payload_b64"] == "AAA="
+    assert json.loads(rows[1]["raw_json"])["n"] == 1
+
+
+def test_get_device_raw_payloads_respects_limit(test_db):
+    # insert 3 rows for the same device
+    DataStore.save_raw_only("ok", {"n": 1}, device_id="device-123")
+    DataStore.save_raw_only("ok", {"n": 2}, device_id="device-123")
+    DataStore.save_raw_only("ok", {"n": 3}, device_id="device-123")
+
+    rows = DataStore.get_device_raw_payloads("device-123", limit=2)
+
+    assert len(rows) == 2
+
+    # we should get n=3 then n=2
+    assert json.loads(rows[0]["raw_json"])["n"] == 3
+    assert json.loads(rows[1]["raw_json"])["n"] == 2
+
+
+def test_get_device_raw_payloads_returns_empty_list_when_none(test_db):
+    rows = DataStore.get_device_raw_payloads("missing-device", limit=10)
+    assert rows == []
+
+
+def test_get_device_raw_payloads_dict_shape(test_db):
+    DataStore.save_raw_only(
+        "unknown_packet",
+        {"hello": "world"},
+        device_id="device-X",
+        payload_b64="AQIDBA==",
+        received_at="2026-02-16T06:51:01.132300865Z",
+    )
+
+    rows = DataStore.get_device_raw_payloads("device-X", limit=10)
+    assert len(rows) == 1
+
+    row = rows[0]
+    # required keys 
+    assert set(row.keys()) == {
+        "id",
+        "ingested_at",
+        "received_at",
+        "decode_status",
+        "payload_b64",
+        "raw_json",
+    }
+
+    assert row["decode_status"] == "unknown_packet"
+    assert row["payload_b64"] == "AQIDBA=="
+    assert row["received_at"] == "2026-02-16T06:51:01.132300865Z"
+    assert json.loads(row["raw_json"]) == {"hello": "world"}
+
+    # ingested_at should exist (default set by SQLite)
+    assert isinstance(row["ingested_at"], str)
+    assert len(row["ingested_at"]) > 0
+
+
+
+
+
+
+
+
+
+
+
 
 
 

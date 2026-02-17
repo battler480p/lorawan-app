@@ -112,5 +112,91 @@ class DataStore:
         conn.close()
 
 
+    @classmethod
+    def get_devices(cls):
+        conn = cls._get_conn()
+        cur = conn.cursor()
+
+        query = """
+                SELECT device_id
+                FROM raw_payloads
+                WHERE device_id IS NOT NULL
+                GROUP BY device_id
+                ORDER BY MAX(ingested_at) DESC
+                """
+        
+        cur.execute(query)
+        rows = cur.fetchall()
+
+        conn.close()
+
+        return [row["device_id"] for row in rows]
+    
+    @classmethod
+    def get_device_readings(cls, device_id: str, limit: int = 100) -> list[SensorReading]:
+
+        conn = cls._get_conn()
+        cur = conn.cursor()
+
+        query = """
+                SELECT device_id, 
+                sensor_name, 
+                value,
+                unit, 
+                measured_at
+                FROM sensor_readings
+                WHERE device_id = ?
+                ORDER BY measured_at DESC 
+                LIMIT ?
+                """
+        
+        cur.execute(query, (device_id, limit))
+        rows = cur.fetchall()
+        conn.close()
+
+        return [
+            SensorReading(
+                device_id=row["device_id"],
+                sensor_name=row["sensor_name"],
+                value=row["value"],
+                unit=row["unit"],
+                measured_at=row["measured_at"]
+            ) 
+            for row in rows
+        ]
+
+
+    @classmethod
+    def get_device_raw_payloads(cls, device_id: str, limit: int = 50) -> list[dict]:
+        conn = cls._get_conn()
+        cur = conn.cursor()
+
+        query = """
+            SELECT id, ingested_at, received_at, decode_status, raw_json, payload_b64
+            FROM raw_payloads
+            WHERE device_id = ?
+            ORDER BY ingested_at DESC
+            LIMIT ?
+        """
+        cur.execute(query, (device_id, limit))
+        rows = cur.fetchall()
+        conn.close()
+
+        return [
+            {
+                "id": row["id"],
+                "ingested_at": row["ingested_at"],   # stored as text
+                "received_at": row["received_at"],   # stored as text or null
+                "decode_status": row["decode_status"],
+                "payload_b64": row["payload_b64"],
+                "raw_json": row["raw_json"],         # JSON string
+            }
+            for row in rows
+        ]
+    
+    
+
+    
+
 
 
