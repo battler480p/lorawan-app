@@ -5,6 +5,8 @@ from datetime import datetime
 
 from app.models import SensorReading 
 
+import json
+
 
 
 class DataStore:
@@ -35,9 +37,11 @@ class DataStore:
         cur.execute("""
             CREATE TABLE IF NOT EXISTS raw_payloads (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    device_id TEXT NOT NULL,
-                    payload_b64 TEXT,
-                    received_at TEXT NOT NULL,
+                    raw_json TEXT NOT NULL,
+                    ingested_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+                    device_id TEXT NULL, 
+                    received_at TEXT NULL,
+                    payload_b64 TEXT NULL,
                     decode_status TEXT NOT NULL
                     );
                 """)
@@ -45,17 +49,44 @@ class DataStore:
         conn.close()
    
     @classmethod
-    def save_raw_only(cls, device_id, raw_b64, received_at, status):
+    def save_raw_only(cls, decode_status, raw_json, device_id=None, received_at=None, payload_b64=None):
         conn = cls._get_conn()
         cur = conn.cursor()
 
-        cur.execute("""
-            INSERT INTO raw_payloads(device_id, payload_b64, received_at, decode_status)
-            VALUES (?, ?, ?, ?)
-        """, (device_id, raw_b64, received_at.isoformat(), status))
+        raw_json_text = json.dumps(raw_json)
 
+        # convert received_at if present
+        received_at_text = (
+            received_at.isoformat()
+            if isinstance(received_at, datetime)
+            else received_at
+        )
+
+        cur.execute(
+            """
+            INSERT INTO raw_payloads(
+                raw_json,
+                device_id,
+                received_at,
+                payload_b64,
+                decode_status
+            )
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                raw_json_text,      # raw_json
+                device_id,          # device_id
+                received_at_text,   # received_at
+                payload_b64,        # payload_b64
+                decode_status,      # decode_status
+            ),
+        )
+
+        raw_id = cur.lastrowid
         conn.commit()
         conn.close()
+        return raw_id
+
 
     
 
