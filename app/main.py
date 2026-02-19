@@ -3,6 +3,7 @@ from app.mqtt_client import MQTTClient
 from app.uplink_handler import UplinkHandler
 from app.datastore import DataStore
 from contextlib import asynccontextmanager
+from datetime import datetime
 
 mqtt_service = MQTTClient(on_uplink=UplinkHandler.handle_uplink)
 
@@ -39,9 +40,44 @@ async def device_raw(device_id: str, limit: int = 10):
 async def device_readings(device_id: str, limit: int = 20):
     return DataStore.get_device_readings(device_id, limit=limit)    
 
+@app.get("/devices/{device_id}/recent_device_readings")
+async def recent_device_readings(device_id: str):
+    return DataStore.get_recent_device_readings(device_id)
 
-@app.get("/devices/{device_id}/{sensor_name}/sensor_readings")
-async def sensor_readings(device_id: str, sensor_name: str, limit: int  = 20):
+
+@app.get("/devices/{device_id}/{sensor_name}/device_individual_sensor_readings")
+async def individual_sensor_readings(device_id: str, sensor_name: str, limit: int  = 20):
     return DataStore.get_device_sensor_readings(device_id, sensor_name, limit=limit)
+
+@app.get("/devices/{device_id}/{sensor_name}/device_readings_since")
+async def device_readings_since(device_id: str, sensor_name: str, since: datetime):
+    return DataStore.get_device_sensor_readings_since(device_id, sensor_name, since)
+
+@app.get("/devices/{device_id}/device_readings_between")
+async def device_readings_between(device_id: str, start: datetime, end: datetime):
+    return DataStore.get_device_readings_between(device_id, start, end)
+
+@app.get("/devices/{device_id}/{sensor_name}/singular_sensor_readings_between")
+async def singular_device_readings_between(device_id: str, sensor_name: str, start: datetime, end: datetime):
+    return DataStore.get_device_singlular_sensor_readings_between(device_id, sensor_name, start, end)
+
+@app.get("/devices/{device_id}/{sensor_name}/sensor_stats")
+async def sensor_stats(device_id: str, sensor_name: str, start: datetime, end: datetime, limit: int = 20):
+    return DataStore.get_sensor_stats(device_id, sensor_name, start, end)
+
+@app.get("/devices/{device_id}")
+async def device_last_seen(device_id: str):
+    return DataStore.get_device_last_seen(device_id)
+
+
+
+
+
+
+
+# @app.get("/devices/{device_id}/{sensor_name}")
+# async def 
+
+
 
 
