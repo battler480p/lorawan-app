@@ -48,18 +48,6 @@ class UplinkHandler:
         return decode_status
     
 
-    # @staticmethod
-    # def process_and_store(payload, uplink, status):
-    #     readings = UplinkParser.to_readings(uplink)
-    #     device_id = uplink.device_id
-    #     raw_b64 = uplink.raw_b64,
-    #     received_at = uplink.received_at
-    #     fport = uplink.fport 
-    #     seq = uplink.seq 
-    #     decoded = uplink.decoded
-    #     DataStore.save_raw_only(device_id, raw_b64, received_at, status)
-    #     DataStore.save_readings(readings) 
-
 
 
     
