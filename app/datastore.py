@@ -405,6 +405,27 @@ class DataStore:
                    start=start,
                    end =end
               )
+    
+    @classmethod
+    def get_device_last_seen(cls, device_id: str) -> datetime | None:
+         conn = cls._get_conn()
+         cur = conn.cursor()
+         query = """
+                SELECT MAX(measured_at) AS last_seen
+                FROM sensor_readings
+                WHERE device_id = ?
+                """
+         cur.execute(query, (device_id,))
+         row = cur.fetchone()
+         conn.close()
+
+         if row["last_seen"] is None:
+            return None
+         
+         return datetime.fromisoformat(row["last_seen"])
+    
+    
+
 
 
         
