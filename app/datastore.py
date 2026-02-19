@@ -424,8 +424,15 @@ class DataStore:
          
          return datetime.fromisoformat(row["last_seen"])
     
-    
 
+    # @classmethod
+    # def get_device_sensors(cls, device_id) -> list[str]:
+    #      conn = cls._get_conn()
+    #      cur = conn.cursor()
+    #      query = """
+    #             SELECT sensor_name
+
+    #             """
 
 
         

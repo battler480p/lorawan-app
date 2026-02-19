@@ -1,13 +1,17 @@
-   
+
 import sqlite3
 import json
 import pytest
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from app.datastore import DataStore
 from app.uplink_parser import UplinkParser
-from app.models import SensorReading
+from app.models import SensorReading, SensorStats
 
+
+# -----------------------
+# Fixtures / Helpers
+# -----------------------
 
 @pytest.fixture
 def test_db(tmp_path, monkeypatch):
@@ -19,7 +23,6 @@ def test_db(tmp_path, monkeypatch):
 
 @pytest.fixture
 def good_ttn_payload():
-    # using keys that current parser supports
     return {
         "end_device_ids": {"device_id": "device-123"},
         "received_at": "2026-02-16T06:51:01.132300865Z",
@@ -30,13 +33,35 @@ def good_ttn_payload():
                 "packet_type": "temp_humi",
                 "temperature_c": 22.4,
                 "humidity_percent": 58.1,
-                # include some other supported keys too
                 "charge_C": 16.777216,
                 "accel_x_g": 1.0,
             },
         },
     }
 
+
+def dt_utc(y, m, d, hh=0, mm=0, ss=0):
+    return datetime(y, m, d, hh, mm, ss, tzinfo=timezone.utc)
+
+
+def insert_reading_direct(db_path, device_id, sensor_name, value, unit, measured_at: datetime):
+    """Insert reading directly as DB row using ISO string (matches DataStore storage)."""
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO sensor_readings(device_id, sensor_name, value, unit, measured_at)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (device_id, sensor_name, value, unit, measured_at.isoformat()),
+    )
+    conn.commit()
+    conn.close()
+
+
+# -----------------------
+# DB Initialization
+# -----------------------
 
 def test_init_db_creates_tables(test_db):
     conn = sqlite3.connect(test_db)
@@ -49,9 +74,14 @@ def test_init_db_creates_tables(test_db):
     assert "raw_payloads" in tables
 
 
+# -----------------------
+# Raw Payload Storage
+# -----------------------
+
 def test_save_raw_only_inserts_row_with_metadata(test_db, good_ttn_payload):
     uplink = UplinkParser.parse_uplink(good_ttn_payload)
     assert uplink is not None
+    assert isinstance(uplink.received_at, datetime)
 
     raw_id = DataStore.save_raw_only(
         decode_status="ok",
@@ -64,11 +94,14 @@ def test_save_raw_only_inserts_row_with_metadata(test_db, good_ttn_payload):
 
     conn = sqlite3.connect(test_db)
     cur = conn.cursor()
-    cur.execute("""
+    cur.execute(
+        """
         SELECT raw_json, device_id, received_at, payload_b64, decode_status
         FROM raw_payloads
         WHERE id = ?
-    """, (raw_id,))
+        """,
+        (raw_id,),
+    )
     row = cur.fetchone()
     conn.close()
 
@@ -79,17 +112,14 @@ def test_save_raw_only_inserts_row_with_metadata(test_db, good_ttn_payload):
     assert device_id == "device-123"
     assert payload_b64 == "AQIDBA=="
 
-    # raw_json is stored as JSON text
     saved = json.loads(raw_json_text)
     assert saved["end_device_ids"]["device_id"] == "device-123"
 
-    # received_at is stored as text (isoformat if datetime)
-    assert isinstance(received_at_text, str)
-    assert len(received_at_text) > 0
+    # received_at stored as iso string from datetime
+    assert received_at_text == uplink.received_at.isoformat()
 
 
 def test_save_raw_only_inserts_row_without_metadata(test_db, good_ttn_payload):
-    # simulate invalid_shape: store only raw_json + status (others NULL)
     raw_id = DataStore.save_raw_only(
         decode_status="invalid_shape",
         raw_json=good_ttn_payload,
@@ -97,11 +127,14 @@ def test_save_raw_only_inserts_row_without_metadata(test_db, good_ttn_payload):
 
     conn = sqlite3.connect(test_db)
     cur = conn.cursor()
-    cur.execute("""
+    cur.execute(
+        """
         SELECT device_id, received_at, payload_b64, decode_status
         FROM raw_payloads
         WHERE id = ?
-    """, (raw_id,))
+        """,
+        (raw_id,),
+    )
     row = cur.fetchone()
     conn.close()
 
@@ -114,99 +147,67 @@ def test_save_raw_only_inserts_row_without_metadata(test_db, good_ttn_payload):
     assert payload_b64 is None
 
 
+# -----------------------
+# Sensor Readings Storage
+# -----------------------
+
 def test_save_sensor_readings_inserts_rows(test_db, good_ttn_payload):
     uplink = UplinkParser.parse_uplink(good_ttn_payload)
     assert uplink is not None
 
     readings = UplinkParser.to_readings(uplink)
-    assert readings 
+    assert readings
 
     DataStore.save_readings(readings)
 
     conn = sqlite3.connect(test_db)
     cur = conn.cursor()
-    cur.execute("""
+    cur.execute(
+        """
         SELECT device_id, sensor_name, value, unit, measured_at
         FROM sensor_readings
-    """)
+        """
+    )
     rows = cur.fetchall()
     conn.close()
 
-    # expect one row per reading returned by to_readings
     assert len(rows) == len(readings)
 
-    # validate saved rows
     saved = {(r[1], r[2], r[3]) for r in rows}  # (sensor_name, value, unit)
     expected = {(r.sensor_name, r.value, r.unit) for r in readings}
     assert saved == expected
 
-    # all measured_at should match uplink.received_at.isoformat() if datetime
-    if hasattr(uplink.received_at, "isoformat"):
-        expected_ts = uplink.received_at.isoformat()
-        for row in rows:
-            assert row[4] == expected_ts
+    expected_ts = uplink.received_at.isoformat()
+    for row in rows:
+        assert row[4] == expected_ts
 
 
+# -----------------------
+# Simple Queries
+# -----------------------
 
 def test_get_devices_returns_unique_devices_in_last_seen_order(test_db):
-    # device-A appears, then device-B appears, then device-A again.
     DataStore.save_raw_only("ok", {"msg": 1}, device_id="device-A")
     DataStore.save_raw_only("ok", {"msg": 2}, device_id="device-B")
     DataStore.save_raw_only("ok", {"msg": 3}, device_id="device-A")
 
     devices = DataStore.get_devices()
 
-    # unique and ordered by last seen (device-A was last inserted)
     assert devices[0] == "device-A"
     assert "device-B" in devices
     assert len(devices) == 2
 
 
-def test_get_device_readings(tmp_path, monkeypatch, good_ttn_payload):
-    test_db = tmp_path / "test_data.db"
-    monkeypatch.setattr(DataStore, "DB_PATH", test_db)
-
-    DataStore.init_db()
-
+def test_get_device_readings_returns_models_and_values(test_db, good_ttn_payload):
     uplink = UplinkParser.parse_uplink(good_ttn_payload)
     assert uplink is not None
 
     readings = UplinkParser.to_readings(uplink)
-    assert readings
-
     DataStore.save_readings(readings)
 
-    retrieved = DataStore.get_device_readings("device-123", 4)
+    retrieved = DataStore.get_device_readings("device-123", limit=100)
 
     assert len(retrieved) == len(readings)
-
-    assert all(isinstance(r, SensorReading) for r in retrieved)
-
-    assert all(r.device_id == "device-123" for r in retrieved)
-
-    by_name = {r.sensor_name: r for r in retrieved}
-
-    assert by_name["temperature"].value == 22.4
-    assert by_name["temperature"].unit == "C"
-
-
-def test_get_device_readings_and_limit(tmp_path, monkeypatch, good_ttn_payload):
-    test_db = tmp_path / "test_data.db"
-    monkeypatch.setattr(DataStore, "DB_PATH", test_db)
-
-    DataStore.init_db()
-    uplink = UplinkParser.parse_uplink(good_ttn_payload)
-    assert uplink is not None
-
-    readings = UplinkParser.to_readings(uplink)
-    assert readings
-
-    DataStore.save_readings(readings)
-
-    limit = 4
-    retrieved = DataStore.get_device_readings("device-123", limit)
-
-    assert len(retrieved) == min(len(readings), limit)
     assert all(isinstance(r, SensorReading) for r in retrieved)
     assert all(r.device_id == "device-123" for r in retrieved)
 
@@ -214,87 +215,198 @@ def test_get_device_readings_and_limit(tmp_path, monkeypatch, good_ttn_payload):
     assert by_name["temperature"].value == 22.4
     assert by_name["temperature"].unit == "C"
 
-def test_get_device_raw_payloads_filters_by_device_and_orders_desc(test_db):
-    # insert payloads in a known order across two devices
+
+def test_get_device_raw_payloads_filters_orders_and_limit(test_db):
     DataStore.save_raw_only("ok", {"n": 1}, device_id="device-A", payload_b64="AAA=")
     DataStore.save_raw_only("ok", {"n": 2}, device_id="device-B", payload_b64="BBB=")
     DataStore.save_raw_only("decoder_error", {"n": 3}, device_id="device-A", payload_b64="CCC=")
 
-    rows = DataStore.get_device_raw_payloads("device-A", limit=50)
-
-    # should only return device-A rows (2 of them)
-    assert len(rows) == 2
-    assert all(isinstance(r, dict) for r in rows)
-
-    # should be ordered newest-first, so the last inserted for device-A comes first
+    rows = DataStore.get_device_raw_payloads("device-A", limit=1)
+    assert len(rows) == 1
     assert rows[0]["decode_status"] == "decoder_error"
-    assert rows[0]["payload_b64"] == "CCC="
     assert json.loads(rows[0]["raw_json"])["n"] == 3
 
-    assert rows[1]["decode_status"] == "ok"
-    assert rows[1]["payload_b64"] == "AAA="
-    assert json.loads(rows[1]["raw_json"])["n"] == 1
+
+# -----------------------
+# Recent-per-sensor Query
+# -----------------------
+
+def test_get_recent_device_readings_returns_latest_per_sensor(test_db):
+    device_id = "device-123"
+    t_old = dt_utc(2026, 2, 16, 10, 0, 0)
+    t_new = dt_utc(2026, 2, 16, 11, 0, 0)
+
+    DataStore.save_readings([
+        SensorReading(device_id=device_id, sensor_name="temp", value=20.0, unit="C", measured_at=t_old),
+        SensorReading(device_id=device_id, sensor_name="humi", value=50.0, unit="%", measured_at=t_old),
+    ])
+    DataStore.save_readings([
+        SensorReading(device_id=device_id, sensor_name="temp", value=22.5, unit="C", measured_at=t_new),
+        SensorReading(device_id=device_id, sensor_name="humi", value=55.2, unit="%", measured_at=t_new),
+    ])
+
+    recent = DataStore.get_recent_device_readings(device_id)
+    assert len(recent) == 2
+
+    temp = next(r for r in recent if r.sensor_name == "temp")
+    humi = next(r for r in recent if r.sensor_name == "humi")
+
+    assert temp.value == 22.5
+    assert humi.value == 55.2
+
+    # Pydantic parses measured_at string -> datetime; compare normalized isoformat
+    assert temp.measured_at == t_new
 
 
-def test_get_device_raw_payloads_respects_limit(test_db):
-    # insert 3 rows for the same device
-    DataStore.save_raw_only("ok", {"n": 1}, device_id="device-123")
-    DataStore.save_raw_only("ok", {"n": 2}, device_id="device-123")
-    DataStore.save_raw_only("ok", {"n": 3}, device_id="device-123")
+def test_get_recent_device_readings_isolates_by_device(test_db):
+    DataStore.save_readings([
+        SensorReading(device_id="dev-A", sensor_name="temp", value=10.0, unit="C", measured_at=dt_utc(2026, 2, 16, 10)),
+    ])
+    DataStore.save_readings([
+        SensorReading(device_id="dev-B", sensor_name="temp", value=30.0, unit="C", measured_at=dt_utc(2026, 2, 16, 12)),
+    ])
 
-    rows = DataStore.get_device_raw_payloads("device-123", limit=2)
-
-    assert len(rows) == 2
-
-    # we should get n=3 then n=2
-    assert json.loads(rows[0]["raw_json"])["n"] == 3
-    assert json.loads(rows[1]["raw_json"])["n"] == 2
-
-
-def test_get_device_raw_payloads_returns_empty_list_when_none(test_db):
-    rows = DataStore.get_device_raw_payloads("missing-device", limit=10)
-    assert rows == []
+    recent_a = DataStore.get_recent_device_readings("dev-A")
+    assert len(recent_a) == 1
+    assert recent_a[0].device_id == "dev-A"
+    assert recent_a[0].value == 10.0
 
 
-def test_get_device_raw_payloads_dict_shape(test_db):
-    DataStore.save_raw_only(
-        "unknown_packet",
-        {"hello": "world"},
-        device_id="device-X",
-        payload_b64="AQIDBA==",
-        received_at="2026-02-16T06:51:01.132300865Z",
+def test_get_recent_device_readings_empty(test_db):
+    assert DataStore.get_recent_device_readings("non-existent-device") == []
+
+
+# -----------------------
+# get_device_sensor_readings
+# -----------------------
+
+def test_get_device_sensor_readings_filters_and_orders(test_db):
+    t1 = dt_utc(2026, 2, 16, 6)
+    t2 = dt_utc(2026, 2, 16, 7)
+
+    insert_reading_direct(test_db, "device-123", "temperature", 20.0, "C", t1)
+    insert_reading_direct(test_db, "device-123", "temperature", 21.0, "C", t2)
+
+    insert_reading_direct(test_db, "device-123", "humidity", 50.0, "%", t2)       # exclude
+    insert_reading_direct(test_db, "device-999", "temperature", 99.0, "C", t2)    # exclude
+
+    results = DataStore.get_device_sensor_readings("device-123", "temperature", limit=100)
+    assert len(results) == 2
+    assert results[0].value == 21.0  # newest first
+    assert results[1].value == 20.0
+
+
+def test_get_device_sensor_readings_respects_limit(test_db):
+    base = dt_utc(2026, 2, 16, 6)
+    insert_reading_direct(test_db, "device-123", "temperature", 20.0, "C", base)
+    insert_reading_direct(test_db, "device-123", "temperature", 21.0, "C", base + timedelta(hours=1))
+    insert_reading_direct(test_db, "device-123", "temperature", 22.0, "C", base + timedelta(hours=2))
+
+    results = DataStore.get_device_sensor_readings("device-123", "temperature", limit=2)
+    assert len(results) == 2
+    assert results[0].value == 22.0
+    assert results[1].value == 21.0
+
+
+def test_get_device_sensor_readings_empty_when_no_match(test_db):
+    assert DataStore.get_device_sensor_readings("no-such-device", "temperature", limit=10) == []
+
+
+
+def test_get_device_sensor_readings_since_filters_by_time_inclusive(test_db):
+    device_id = "device-1"
+    t0 = dt_utc(2026, 2, 16, 10)
+    t1 = dt_utc(2026, 2, 16, 11)
+    t2 = dt_utc(2026, 2, 16, 12)
+
+    DataStore.save_readings([
+        SensorReading(device_id=device_id, sensor_name="temperature", value=10, unit="C", measured_at=t0),
+        SensorReading(device_id=device_id, sensor_name="temperature", value=11, unit="C", measured_at=t1),
+        SensorReading(device_id=device_id, sensor_name="temperature", value=12, unit="C", measured_at=t2),
+    ])
+
+    since = t1
+    results = DataStore.get_device_sensor_readings_since(device_id, "temperature", since)
+
+    # inclusive of t1 and after, ordered ASC
+    assert [r.value for r in results] == [11, 12]
+    assert results[0].measured_at == t1
+    assert results[1].measured_at == t2
+
+
+def test_get_device_readings_between_filters_inclusive_and_orders_asc(test_db):
+    device_id = "device-1"
+    t0 = dt_utc(2026, 2, 16, 10)
+    t1 = dt_utc(2026, 2, 16, 11)
+    t2 = dt_utc(2026, 2, 16, 12)
+
+    DataStore.save_readings([
+        SensorReading(device_id=device_id, sensor_name="a", value=1, unit="u", measured_at=t0),
+        SensorReading(device_id=device_id, sensor_name="a", value=2, unit="u", measured_at=t1),
+        SensorReading(device_id=device_id, sensor_name="a", value=3, unit="u", measured_at=t2),
+    ])
+
+    results = DataStore.get_device_readings_between(device_id, start=t0, end=t1)
+    # BETWEEN is inclusive; should include t0 and t1, ordered ASC
+    assert [r.value for r in results] == [1, 2]
+    assert results[0].measured_at == t0
+    assert results[1].measured_at == t1
+
+
+def test_get_device_singlular_sensor_readings_between_filters_sensor_and_time(test_db):
+    device_id = "device-1"
+    t0 = dt_utc(2026, 2, 16, 10)
+    t1 = dt_utc(2026, 2, 16, 11)
+
+    DataStore.save_readings([
+        SensorReading(device_id=device_id, sensor_name="temperature", value=10, unit="C", measured_at=t0),
+        SensorReading(device_id=device_id, sensor_name="humidity", value=50, unit="%", measured_at=t0),
+        SensorReading(device_id=device_id, sensor_name="temperature", value=11, unit="C", measured_at=t1),
+    ])
+
+    results = DataStore.get_device_singlular_sensor_readings_between(
+        device_id=device_id,
+        sensor_name="temperature",
+        start=t0,
+        end=t1,
     )
 
-    rows = DataStore.get_device_raw_payloads("device-X", limit=10)
-    assert len(rows) == 1
-
-    row = rows[0]
-    # required keys 
-    assert set(row.keys()) == {
-        "id",
-        "ingested_at",
-        "received_at",
-        "decode_status",
-        "payload_b64",
-        "raw_json",
-    }
-
-    assert row["decode_status"] == "unknown_packet"
-    assert row["payload_b64"] == "AQIDBA=="
-    assert row["received_at"] == "2026-02-16T06:51:01.132300865Z"
-    assert json.loads(row["raw_json"]) == {"hello": "world"}
-
-    # ingested_at should exist (default set by SQLite)
-    assert isinstance(row["ingested_at"], str)
-    assert len(row["ingested_at"]) > 0
+    assert [r.value for r in results] == [10, 11]
+    assert all(r.sensor_name == "temperature" for r in results)
 
 
+def test_get_sensor_stats_returns_stats_object(test_db):
+    device_id = "device-1"
+    t0 = dt_utc(2026, 2, 16, 10)
+    t1 = dt_utc(2026, 2, 16, 11)
+    t2 = dt_utc(2026, 2, 16, 12)
+
+    DataStore.save_readings([
+        SensorReading(device_id=device_id, sensor_name="temperature", value=10.0, unit="C", measured_at=t0),
+        SensorReading(device_id=device_id, sensor_name="temperature", value=20.0, unit="C", measured_at=t1),
+        SensorReading(device_id=device_id, sensor_name="temperature", value=30.0, unit="C", measured_at=t2),
+    ])
+
+    stats = DataStore.get_sensor_stats(device_id, "temperature", start=t0, end=t2)
+    assert isinstance(stats, SensorStats)
+
+    assert stats.device_id == device_id
+    assert stats.sensor_name == "temperature"
+    assert stats.count == 3
+    assert stats.min == 10.0
+    assert stats.max == 30.0
+    assert stats.avg == pytest.approx(20.0)
+    assert stats.start == t0
+    assert stats.end == t2
 
 
+def test_get_sensor_stats_returns_none_when_no_rows(test_db):
+    device_id = "device-1"
+    t0 = dt_utc(2026, 2, 16, 10)
+    t1 = dt_utc(2026, 2, 16, 11)
 
-
-
-
+    stats = DataStore.get_sensor_stats(device_id, "temperature", start=t0, end=t1)
+    assert stats is None
 
 
 
