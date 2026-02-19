@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Iterable 
 from datetime import datetime 
 
-from app.models import SensorReading 
+from app.models import SensorReading, SensorStats
 
 import json
 
@@ -272,6 +272,139 @@ class DataStore:
                 ) 
                 for row in rows
             ]
+    
+    @classmethod 
+    def get_device_sensor_readings_since(cls, device_id: str, sensor_name: str, since):
+            conn = cls._get_conn()
+            cur = conn.cursor()
+            query = """
+                        SELECT device_id, sensor_name, value, unit, measured_at
+                        FROM sensor_readings
+                        WHERE device_id = ?
+                         AND sensor_name = ?
+                        AND measured_at >= ?
+                        ORDER BY measured_at ASC
+                        """
+            cur.execute(query, (
+                                    device_id,
+                                    sensor_name,
+                                    since.isoformat() if isinstance(since, datetime) else since
+                                ))
+            rows = cur.fetchall()
+            conn.close()
+
+
+            return [
+                SensorReading(
+                    device_id=row["device_id"],
+                    sensor_name=row["sensor_name"],
+                    value=row["value"],
+                    unit=row["unit"],
+                    measured_at=row["measured_at"]
+                ) 
+                for row in rows
+            ]
+
+    @classmethod 
+    def get_device_readings_between(cls, device_id: str, start: datetime, end: datetime) -> list[SensorReading]:
+         conn = cls._get_conn()
+         cur = conn.cursor()
+         query = """
+
+                    SELECT device_id, sensor_name, value, unit, measured_at
+                    FROM sensor_readings
+                    WHERE device_id = ?
+                    AND measured_at BETWEEN ? AND ?
+                    ORDER BY measured_at ASC
+                """
+         
+         cur.execute(query, (device_id, start.isoformat(), end.isoformat()))
+         rows = cur.fetchall()
+         conn.close()
+
+         return [
+              SensorReading(
+                   device_id=row["device_id"],
+                   sensor_name=row["sensor_name"],
+                   value=row["value"],
+                   unit=row["unit"],
+                   measured_at=row["measured_at"]
+              )
+
+              for row in rows
+         ]
+
+    @classmethod 
+    def get_device_singlular_sensor_readings_between(cls, device_id: str, sensor_name: str, start: datetime, end: datetime) -> list[SensorReading]:
+         conn = cls._get_conn()
+         cur = conn.cursor()
+         query = """
+
+                    SELECT device_id, sensor_name, value, unit, measured_at
+                    FROM sensor_readings
+                    WHERE device_id = ?
+                    AND sensor_name = ?
+                    AND measured_at BETWEEN ? AND ?
+                    ORDER BY measured_at ASC
+                """
+         
+         cur.execute(query, (device_id, sensor_name, start.isoformat(), end.isoformat()))
+         rows = cur.fetchall()
+         conn.close()
+
+         return [
+              SensorReading(
+                   device_id=row["device_id"],
+                   sensor_name=row["sensor_name"],
+                   value=row["value"],
+                   unit=row["unit"],
+                   measured_at=row["measured_at"]
+              )
+
+              for row in rows
+         ]
+    
+
+    @classmethod 
+    def get_sensor_stats(cls, device_id: str, sensor_name: str, start:datetime, end:datetime):
+         conn = cls._get_conn()
+         cur = conn.cursor()
+         query = """
+                SELECT 
+                MIN(value) as min_val,
+                MAX(value) as max_val,
+                AVG(value) as avg_val,
+                COUNT(*) as count
+                FROM sensor_readings
+                WHERE device_id = ?
+                AND sensor_name = ?
+                AND measured_at BETWEEN ? AND ?
+                """
+         cur.execute(query, (device_id, sensor_name, start.isoformat(), end.isoformat()))
+         row = cur.fetchone()
+         conn.close()
+
+
+         if row is None or row["count"] == 0:
+              return None
+
+
+
+        #  if row is None or row["min_val"] is None:
+        #       return None
+         
+         
+
+         return SensorStats(
+                   device_id=device_id,
+                   sensor_name = sensor_name,
+                   min = row["min_val"],
+                   max = row["max_val"],
+                   avg=row["avg_val"],
+                   count = row["count"],
+                   start=start,
+                   end =end
+              )
 
 
         

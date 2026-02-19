@@ -19,6 +19,17 @@ class SensorReading(BaseModel):
     unit: str
     measured_at: datetime
 
+class SensorStats(BaseModel):
+    device_id: str
+    sensor_name: str
+    min: float
+    max: float
+    avg: float
+    count: int
+    start: datetime
+    end: datetime
+
+
 class DownlinkCommand(BaseModel):
     device_id: str
     command: str 
