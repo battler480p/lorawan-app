@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard</title>
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+</head>
+<body>
+
+<h1>Devices</h1>
+
+<div 
+  hx-get="/ui/partials/devices"
+  hx-trigger="load, every 10s"
+  hx-swap="innerHTML">
+</div>
+
+</body>
+</html>
