@@ -3,7 +3,11 @@ from app.mqtt_client import MQTTClient
 from app.uplink_handler import UplinkHandler
 from app.datastore import DataStore
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+from nicegui import app as nicegui_app
+from nicegui import ui 
+from app.gui import register_pages
+import uvicorn
 
 mqtt_service = MQTTClient(on_uplink=UplinkHandler.handle_uplink)
 
@@ -69,15 +73,23 @@ async def sensor_stats(device_id: str, sensor_name: str, start: datetime, end: d
 async def device_last_seen(device_id: str):
     return DataStore.get_device_last_seen(device_id)
 
+register_pages()
+
+# @ui.page("/")
+# def gui_home():
+#     ui.dark_mode().bind_value(nicegui_app.storage.user, "dark_mode")
+
+#     ui.label("Sensor Dashboard").classes("text-2xl font-bold")
+#     ui.checkbox('dark mode').bind_value(nicegui_app.storage.user, 'dark_mode')
+
+
+ui.run_with(
+    app,
+    mount_path="/gui",
+    storage_secret="pick-your-private-secret-here",
+)
 
 
 
-
-
-
-# @app.get("/devices/{device_id}/{sensor_name}")
-# async def 
-
-
-
-
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, log_level="info", reload=True)
