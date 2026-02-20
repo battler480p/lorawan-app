@@ -1,12 +1,8 @@
-from fastapi import FastAPI
-from app.mqtt_client import MQTTClient
-from app.uplink_handler import UplinkHandler
+
 from app.datastore import DataStore
-from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 from nicegui import app as nicegui_app
-from nicegui import ui 
-import uvicorn
+from nicegui import ui
 
 
 def register_pages() -> None: 
