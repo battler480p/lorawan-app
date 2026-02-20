@@ -424,6 +424,26 @@ class DataStore:
          
          return datetime.fromisoformat(row["last_seen"])
     
+    @classmethod
+    def get_device_sensors(cls, device_id) -> list[str]:
+         conn = cls._get_conn()
+         cur = conn.cursor()
+         query = """
+         SELECT sensor_name
+         FROM sensor_readings
+         WHERE device_id = ?
+         GROUP BY sensor_name
+         ORDER BY MAX(measured_at) DESC
+         """
+
+         cur.execute(query, (device_id,))
+         rows = cur.fetchall()
+         conn.close()
+    
+        
+         return [row["sensor_name"] for row in rows]
+
+
 
     # @classmethod
     # def get_device_sensors(cls, device_id) -> list[str]:
@@ -435,7 +455,7 @@ class DataStore:
     #             """
 
 
-        
+    
 
 
 
