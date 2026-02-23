@@ -5,10 +5,19 @@ from nicegui import app as nicegui_app
 from nicegui import ui
 
 
-def register_pages() -> None: 
+def register_pages() -> None:
     @ui.page("/")
-    def gui_home():
-        ui.dark_mode().bind_value(nicegui_app.storage.user, "dark_mode")
+    def dashboard_page():
+        ui.label("Sensor Dashboard").classes("text-2x1 font-bold")
+        devices_label = ui.label("")
 
-        ui.label("Sensor Dashboard").classes("text-2xl font-bold")
-        ui.checkbox('dark mode').bind_value(nicegui_app.storage.user, 'dark_mode')
+
+        status_label = ui.label("Devices: not loaded")
+
+        def on_refresh_click():
+            devices = DataStore.get_devices()
+            status_label.text = f"Devices: {len(devices)} found"
+            devices_label.text = ", ".join(devices) if devices else "(none yet)"
+
+        ui.button("Refresh", on_click=on_refresh_click)
+
