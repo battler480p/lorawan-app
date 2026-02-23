@@ -29,6 +29,7 @@ python -m pytest
 
 ## Running the Server 
 To run the server, enter this command 
-```uvicorn app.main:app --reload
+```bash 
+uvicorn app.main:app --reload
 ```
 
