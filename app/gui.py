@@ -16,10 +16,21 @@ def register_pages() -> None:
         last_seen_label = ui.label("Last seen: (select a device)")
         stats_label = ui.label("Stats (last 24h): (select a device + sensor)")
 
-        device_select = ui.select(options=[], label="Device").classes("w-80")
-        sensor_select = ui.select(options=[], label="Sensor").classes("w-80")
+        device_select = None
+        sensor_select = None
 
-        # sensor_info_label = ui.label("Sensor: (select a sensor)")
+
+        recent_table = ui.table(
+            columns=[
+                {"name": "measured_at", "label": "Time", "field": "measured_at", "align": "left"},
+                {"name": "sensor_name", "label": "Sensor", "field": "sensor_name", "align": "left"},
+                {"name": "value", "label": "Value", "field": "value", "align": "right"},
+            ],
+            rows=[],
+            row_key="measured_at",
+        ).classes("w-full")
+
+
 
 
         ##states as a dict 
@@ -96,11 +107,31 @@ def register_pages() -> None:
             
 
         
+        def refresh_recent_readings() -> None: 
+            device_id = selected_device_id["value"]
+            if not device_id: 
+                recent_table.rows = []
+                return 
+            
+            readings = DataStore.get_recent_device_readings(device_id)
+            
+            rows = []
+            for r in readings:
+                rows.append({
+                    "measured_at": str(r.measured_at),
+                    "sensor_name": r.sensor_name,
+                    "value": r.value,
+                })
+            
+            recent_table.rows = rows 
+
+        
     #event handlers 
         def on_device_change(event) -> None: 
             selected_device_id["value"] = event.value
             refresh_last_seen()
             refresh_sensors()
+            refresh_recent_readings()
         
         def on_sensor_change(event) -> None:
             selected_sensor_name["value"] = event.value
@@ -108,21 +139,8 @@ def register_pages() -> None:
 
             
             
-        device_select.delete()
-        sensor_select.delete()
-
-        device_select = ui.select(
-            options=[],
-            label="Device",
-            on_change=on_device_change,
-        ).classes("w-80")
-
-        sensor_select = ui.select(
-            options=[],
-            label="Sensor",
-            on_change=on_sensor_change,
-        ).classes("w-80")
-
+        device_select = ui.select(options=[], label="Device", on_change=on_device_change).classes("w-80")
+        sensor_select = ui.select(options=[], label="Sensor", on_change=on_sensor_change).classes("w-80")
         
         
         #initialize 
@@ -130,4 +148,5 @@ def register_pages() -> None:
         refresh_last_seen()
         refresh_sensors()
         refresh_stats()
+        refresh_recent_readings()
 
