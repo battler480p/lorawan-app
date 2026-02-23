@@ -14,6 +14,8 @@ def register_pages() -> None:
 
         #widgets
         last_seen_label = ui.label("Last seen: (select a device)")
+
+
         stats_label = ui.label("Stats (last 24h): (select a device + sensor)")
 
         device_select = None
@@ -25,10 +27,16 @@ def register_pages() -> None:
                 {"name": "measured_at", "label": "Time", "field": "measured_at", "align": "left"},
                 {"name": "sensor_name", "label": "Sensor", "field": "sensor_name", "align": "left"},
                 {"name": "value", "label": "Value", "field": "value", "align": "right"},
+                {"name": "unit", "label": "Unit", "field": "unit", "align": "left" }
             ],
             rows=[],
             row_key="measured_at",
         ).classes("w-full")
+
+        
+        #placeholders
+        device_select = None
+        sensor_select = None
 
 
 
@@ -37,9 +45,34 @@ def register_pages() -> None:
 
         selected_device_id = {"value": None}
         selected_sensor_name = {"value": None}
+        selected_range = {"hours": 24}
 
         
         #refresh functions
+       
+        def refresh_stats() -> None: 
+            device_id = selected_device_id["value"]
+            sensor_name = selected_sensor_name["value"]
+
+            if not device_id or not sensor_name: 
+                stats_label.text = "Stats (last 24h): (select a device + sensor)"
+                return 
+            
+            end = datetime.now(timezone.utc)
+            start = end - timedelta(hours=selected_range["hours"])
+            
+            stats = DataStore.get_sensor_stats(device_id, sensor_name, start, end)
+            if stats is None:
+                stats_label.text = f"Stats (last 24h) for {sensor_name}: (no data)"
+                return 
+            
+            stats_label.text = (
+                f"Stats (last 24h) for {stats.sensor_name}: "
+                f"count={stats.count}, min={stats.min:.3f}, max={stats.max:.3f}, avg={stats.avg:.3f}"
+            )
+
+
+
 
         def refresh_devices() -> None:
             devices = DataStore.get_devices() #load device options from DB and update dropdown options 
@@ -55,7 +88,6 @@ def register_pages() -> None:
                 return
             last_seen = DataStore.get_device_last_seen(device_id)
             last_seen_label.text = f"Last seen: {last_seen.isoformat() if last_seen else '(never)'}"
-
 
 
 
@@ -81,31 +113,7 @@ def register_pages() -> None:
             
 
 
-
-
-        def refresh_stats() -> None: 
-            device_id = selected_device_id["value"]
-            sensor_name = selected_sensor_name["value"]
-
-            if not device_id or not sensor_name: 
-                stats_label.text = "Stats (last 24h): (select a device + sensor)"
-                return 
             
-            end = datetime.now(timezone.utc)
-            start = end - timedelta(hours=24)
-            
-            stats = DataStore.get_sensor_stats(device_id, sensor_name, start, end)
-            if stats is None:
-                stats_label.text = f"Stats (last 24h) for {sensor_name}: (no data)"
-                return 
-            
-            stats_label.text = (
-                f"Stats (last 24h) for {stats.sensor_name}: "
-                f"count={stats.count}, min={stats.min:.3f}, max={stats.max:.3f}, avg={stats.avg:.3f}"
-            )
-
-            
-
         
         def refresh_recent_readings() -> None: 
             device_id = selected_device_id["value"]
@@ -121,11 +129,22 @@ def register_pages() -> None:
                     "measured_at": str(r.measured_at),
                     "sensor_name": r.sensor_name,
                     "value": r.value,
+                    "unit": r.unit,
                 })
             
             recent_table.rows = rows 
 
-        
+        def set_range(hours: int) -> None:
+            selected_range["hours"] = hours
+            refresh_stats()
+
+        with ui.row().classes("gap-2"):
+            ui.button("1h", on_click=lambda: set_range(1))
+            ui.button("24h", on_click=lambda: set_range(24))
+            ui.button("168h (7d)", on_click=lambda: set_range(168))
+
+
+                
     #event handlers 
         def on_device_change(event) -> None: 
             selected_device_id["value"] = event.value
@@ -149,4 +168,6 @@ def register_pages() -> None:
         refresh_sensors()
         refresh_stats()
         refresh_recent_readings()
+
+        ui.timer(5.0, lambda: refresh_recent_readings() if selected_device_id["value"] else None)
 
