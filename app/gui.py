@@ -13,10 +13,12 @@ def register_pages() -> None:
         ## create widget, store state, on change update state and call refresh, refresh pulls from db and updates widget
 
         #widgets
-        device_select = ui.select(options=[], label="Device").classes("w-80")
         last_seen_label = ui.label("Last seen: (select a device)")
+        stats_label = ui.label("Stats (last 24h): (select a device + sensor)")
 
-        sensor_select = ui.select(options = [], label = "Sensor").classes("w-80")
+        device_select = ui.select(options=[], label="Device").classes("w-80")
+        sensor_select = ui.select(options=[], label="Sensor").classes("w-80")
+
         # sensor_info_label = ui.label("Sensor: (select a sensor)")
 
 
@@ -44,23 +46,52 @@ def register_pages() -> None:
             last_seen_label.text = f"Last seen: {last_seen.isoformat() if last_seen else '(never)'}"
 
 
-        def refresh_sensors() -> None: #update sensor list based on selected device and update sensor dropdown
+
+
+
+        def refresh_sensors() -> None:
             device_id = selected_device_id["value"]
             if not device_id:
                 sensor_select.options = []
                 sensor_select.value = None
                 selected_sensor_name["value"] = None
-                # sensor_info_label.text = "Sensor: (no device selected)"
-                return 
-            
+                refresh_stats()  
+                return
+
             sensors = DataStore.get_device_sensors(device_id)
-            sensor_select.options = sensors 
+            sensor_select.options = sensors
+
 
             if selected_sensor_name["value"] not in sensors:
-                selected_sensor_name["value"] = sensors[0] if sensors else None 
+                selected_sensor_name["value"] = sensors[0] if sensors else None
                 sensor_select.value = selected_sensor_name["value"]
+
+            refresh_stats()  
             
-            # sensor_info_label.text = f"Sensor: {selected_sensor_name['value'] or '(none)'}"
+
+
+
+
+        def refresh_stats() -> None: 
+            device_id = selected_device_id["value"]
+            sensor_name = selected_sensor_name["value"]
+
+            if not device_id or not sensor_name: 
+                stats_label.text = "Stats (last 24h): (select a device + sensor)"
+                return 
+            
+            end = datetime.now(timezone.utc)
+            start = end - timedelta(hours=24)
+            
+            stats = DataStore.get_sensor_stats(device_id, sensor_name, start, end)
+            if stats is None:
+                stats_label.text = f"Stats (last 24h) for {sensor_name}: (no data)"
+                return 
+            
+            stats_label.text = (
+                f"Stats (last 24h) for {stats.sensor_name}: "
+                f"count={stats.count}, min={stats.min:.3f}, max={stats.max:.3f}, avg={stats.avg:.3f}"
+            )
 
             
 
@@ -71,16 +102,32 @@ def register_pages() -> None:
             refresh_last_seen()
             refresh_sensors()
         
-        def on_sensor_change(event) -> None: 
+        def on_sensor_change(event) -> None:
             selected_sensor_name["value"] = event.value
-            # sensor_info_label.text = f"Sensor: {selected_sensor_name['value'] or '(none)'}"
+            refresh_stats()
+
             
-        device_select.on("update:model-value", on_device_change)
-        sensor_select.on("update:model-value", on_sensor_change)
+            
+        device_select.delete()
+        sensor_select.delete()
+
+        device_select = ui.select(
+            options=[],
+            label="Device",
+            on_change=on_device_change,
+        ).classes("w-80")
+
+        sensor_select = ui.select(
+            options=[],
+            label="Sensor",
+            on_change=on_sensor_change,
+        ).classes("w-80")
+
         
         
         #initialize 
         refresh_devices()
         refresh_last_seen()
         refresh_sensors()
+        refresh_stats()
 
