@@ -8,35 +8,15 @@ from nicegui import ui
 def register_pages() -> None:
     @ui.page("/")
     def dashboard_page():
-        ui.label("Sensor Dashboard").classes("text-2xl font-bold")
-
-        ## create widget, store state, on change update state and call refresh, refresh pulls from db and updates widget
-
-        #widgets
-        last_seen_label = ui.label("Last seen: (select a device)")
-
-
-        stats_label = ui.label("Stats (last 24h): (select a device + sensor)")
-
-        device_select = None
-        sensor_select = None
-
-
-        recent_table = ui.table(
-            columns=[
-                {"name": "measured_at", "label": "Time", "field": "measured_at", "align": "left"},
-                {"name": "sensor_name", "label": "Sensor", "field": "sensor_name", "align": "left"},
-                {"name": "value", "label": "Value", "field": "value", "align": "right"},
-                {"name": "unit", "label": "Unit", "field": "unit", "align": "left" }
-            ],
-            rows=[],
-            row_key="measured_at",
-        ).classes("w-full")
-
         
         #placeholders
         device_select = None
         sensor_select = None
+        device_select = None
+        sensor_select = None
+        last_seen_label = None
+        stats_label = None
+        recent_table = None
 
 
 
@@ -67,7 +47,7 @@ def register_pages() -> None:
                 return 
             
             stats_label.text = (
-                f"Stats (last 24h) for {stats.sensor_name}: "
+                f"Stats (last {selected_range['hours']} hours) for {stats.sensor_name}: "
                 f"count={stats.count}, min={stats.min:.3f}, max={stats.max:.3f}, avg={stats.avg:.3f}"
             )
 
@@ -134,18 +114,14 @@ def register_pages() -> None:
             
             recent_table.rows = rows 
 
+
+        #event handlers 
+
         def set_range(hours: int) -> None:
             selected_range["hours"] = hours
             refresh_stats()
 
-        with ui.row().classes("gap-2"):
-            ui.button("1h", on_click=lambda: set_range(1))
-            ui.button("24h", on_click=lambda: set_range(24))
-            ui.button("168h (7d)", on_click=lambda: set_range(168))
-
-
-                
-    #event handlers 
+            
         def on_device_change(event) -> None: 
             selected_device_id["value"] = event.value
             refresh_last_seen()
@@ -156,10 +132,63 @@ def register_pages() -> None:
             selected_sensor_name["value"] = event.value
             refresh_stats()
 
+
+
+        with ui.column().classes("w-full items-center"):
+
+            # main card
+            with ui.card().classes("w-full max-w-5xl"):
+
+                ui.label("Sensor Dashboard").classes("text-2xl font-bold")
+
+                # contrl row 
+                with ui.row().classes("w-full items-end gap-4"):
+
+                    device_select = ui.select(
+                        options=[],
+                        label="Device",
+                        on_change=on_device_change,
+                    ).classes("w-64")
+
+                    sensor_select = ui.select(
+                        options=[],
+                        label="Sensor",
+                        on_change=on_sensor_change,
+                    ).classes("w-64")
+
+                    with ui.row().classes("gap-2"):
+                        ui.button("1h", on_click=lambda: set_range(1))
+                        ui.button("24h", on_click=lambda: set_range(24))
+                        ui.button("7d", on_click=lambda: set_range(168))
+
+                # info
+                with ui.row().classes("w-full justify-between mt-2"):
+                    last_seen_label = ui.label(
+                        "Last seen: (select a device)"
+                    ).classes("text-sm opacity-80")
+
+                    stats_label = ui.label(
+                        "Stats: (select a device + sensor)"
+                    ).classes("text-sm")
+
+            # recent readings card 
+            with ui.card().classes("w-full max-w-5xl mt-4"):
+                ui.label("Recent Readings").classes("text-lg font-semibold")
+
+                recent_table = ui.table(
+                    columns=[
+                        {"name": "measured_at", "label": "Time", "field": "measured_at"},
+                        {"name": "sensor_name", "label": "Sensor", "field": "sensor_name"},
+                        {"name": "value", "label": "Value", "field": "value", "align": "right"},
+                        {"name": "unit", "label": "Unit", "field": "unit"},
+                    ],
+                    rows=[],
+                    row_key="measured_at",
+                ).classes("w-full")
+
+
             
-            
-        device_select = ui.select(options=[], label="Device", on_change=on_device_change).classes("w-80")
-        sensor_select = ui.select(options=[], label="Sensor", on_change=on_sensor_change).classes("w-80")
+
         
         
         #initialize 
