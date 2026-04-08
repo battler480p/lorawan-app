@@ -9,10 +9,12 @@ class UplinkParser:
     SENSORS = {
         "temperature_c": ("temperature", "C"),
         "humidity_percent": ("humidity", "%"),
-        "accel_x_g": ("accel_x", "g"),
-        "accel_y_g": ("accel_y", "g"),
-        "accel_z_g": ("accel_z", "g"),
-        "charge_C": ("charge", "C"),
+        "pressure_hpa": ("pressure", "hpa"),
+        "wind_speed_mph": ("wind_speed", "mph"),
+        "ir": ("infrared", "counts"),
+        "visible": ("visible_light", "counts"),
+        # "wind_vane_raw": ("")
+        "battery_mV": ("battery", "mV"),
        # "pressure": ("pressure", "hPa"),
        # "sunlight": ("sunlight", "lux"),
        # "wind_direction": ("wind_direction", "deg"),
