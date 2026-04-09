@@ -2,11 +2,13 @@ from fastapi import FastAPI
 from app.mqtt_client import MQTTClient
 from app.uplink_handler import UplinkHandler
 from app.datastore import DataStore
+from app.models import DownlinkCommand, IntervalRequest
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 from nicegui import app as nicegui_app
 from nicegui import ui 
 from app.gui import register_pages
+from app.downlink_encoder import DownlinkEncoder
 import uvicorn
 
 mqtt_service = MQTTClient(on_uplink=UplinkHandler.handle_uplink)
@@ -73,14 +75,27 @@ async def sensor_stats(device_id: str, sensor_name: str, start: datetime, end: d
 async def device_last_seen(device_id: str):
     return DataStore.get_device_last_seen(device_id)
 
+import base64
+
+from app.downlink_encoder import DownlinkEncoder
+import base64
+
+@app.post("/devices/{device_id}/interval/{sensor_name}")
+async def set_interval(device_id: str, sensor_name: str, req: IntervalRequest):
+
+    sensor_id = DownlinkEncoder.get_sensor_id(sensor_name)
+
+    interval_minutes = req.interval_minutes
+
+    payload = DownlinkEncoder.encode_set_interval(sensor_id, interval_minutes)
+    b64 = base64.b64encode(payload).decode()
+
+    mqtt_service.send_downlink(device_id, b64)
+
+    return {"status": "queued"}
+
 register_pages()
 
-# @ui.page("/")
-# def gui_home():
-#     ui.dark_mode().bind_value(nicegui_app.storage.user, "dark_mode")
-
-#     ui.label("Sensor Dashboard").classes("text-2xl font-bold")
-#     ui.checkbox('dark mode').bind_value(nicegui_app.storage.user, 'dark_mode')
 
 
 ui.run_with(

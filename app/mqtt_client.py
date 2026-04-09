@@ -1,8 +1,10 @@
 import json
 import os
+import base64
 import paho.mqtt.client as mqtt
 from dotenv import load_dotenv
 from typing import Callable, Optional
+from app.models import DownlinkCommand
 
 # load environment variables from .env
 load_dotenv()
@@ -72,4 +74,20 @@ class MQTTClient:
         self.client.loop_stop()
         self.client.disconnect()
 
-   # def publish_downlink(), will implement later 
+    def send_downlink(self, device_id, payload_b64):
+        topic = f"v3/{self.username}/devices/{device_id}/down/push"
+
+        message = {
+            "downlinks": [{
+                "f_port": 10,
+                "frm_payload": payload_b64,
+            }]
+        }
+
+        print("[MQTT] Sending downlink:")
+        print("Topic:", topic)
+        print("Payload:", message)
+
+        result = self.client.publish(topic, json.dumps(message))
+        print("Publish result:", result)
+            

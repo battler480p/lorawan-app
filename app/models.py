@@ -39,7 +39,7 @@ class DownlinkCommand(BaseModel):
 # API input models 
 
 class IntervalRequest(BaseModel):
-    interval_seconds: int
+    interval_minutes: int
 
 
 
