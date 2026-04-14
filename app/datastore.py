@@ -45,6 +45,18 @@ class DataStore:
                     decode_status TEXT NOT NULL
                     );
                 """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS downlink_commands (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    device_id TEXT NOT NULL,
+                    cmd INTEGER NOT NULL,
+                    target INTEGER NOT NULL,
+                    length INTEGER NOT NULL,
+                    payload_b64 TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+                    );
+                """)
         conn.commit()
         conn.close()
    
@@ -388,10 +400,6 @@ class DataStore:
          if row is None or row["count"] == 0:
               return None
 
-
-
-        #  if row is None or row["min_val"] is None:
-        #       return None
          
          
 
@@ -442,17 +450,61 @@ class DataStore:
     
         
          return [row["sensor_name"] for row in rows]
+    
+    @classmethod
+    def save_downlink_command(cls, device_id, cmd, target, length, payload_b64, status="queued"):
+        conn = cls._get_conn()
+        cur = conn.cursor()
+
+        cur.execute("""
+            INSERT INTO downlink_commands(
+                device_id,
+                cmd,
+                target,
+                length,
+                payload_b64,
+                status
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (device_id, cmd, target, length, payload_b64, status))
+
+        conn.commit()
+        conn.close()
+
+
+    @classmethod
+    def get_device_downlinks(cls, device_id: str, limit: int = 50):
+        conn = cls._get_conn()
+        cur = conn.cursor()
+
+        query = """
+            SELECT id, device_id, cmd, target, length, payload_b64, status, created_at
+            FROM downlink_commands
+            WHERE device_id = ?
+            ORDER BY created_at DESC
+            LIMIT ?
+        """
+
+        cur.execute(query, (device_id, limit))
+        rows = cur.fetchall()
+        conn.close()
+
+        return [
+            {
+                "id": row["id"],
+                "device_id": row["device_id"],
+                "cmd": row["cmd"],
+                "target": row["target"],
+                "length": row["length"],
+                "payload_b64": row["payload_b64"],
+                "status": row["status"],
+                "created_at": row["created_at"],
+            }
+            for row in rows
+        ]
 
 
 
-    # @classmethod
-    # def get_device_sensors(cls, device_id) -> list[str]:
-    #      conn = cls._get_conn()
-    #      cur = conn.cursor()
-    #      query = """
-    #             SELECT sensor_name
-
-    #             """
 
 
     

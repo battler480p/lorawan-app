@@ -87,12 +87,47 @@ async def set_interval(device_id: str, sensor_name: str, req: IntervalRequest):
 
     interval_minutes = req.interval_minutes
 
-    payload = DownlinkEncoder.encode_set_interval(sensor_id, interval_minutes)
-    b64 = base64.b64encode(payload).decode()
+    payload_bytes = DownlinkEncoder.encode_set_interval(sensor_id, interval_minutes)
+    payload_b64 = base64.b64encode(payload_bytes).decode()
 
-    mqtt_service.send_downlink(device_id, b64)
+    #save to DB 
+    DataStore.save_downlink_command(
+        device_id=device_id,
+        cmd=payload_bytes[0],
+        target=payload_bytes[1],
+        length=payload_bytes[2],
+        payload_b64=payload_b64,
+        status="queued"
+    )
+
+    mqtt_service.send_downlink(device_id, payload_b64)
 
     return {"status": "queued"}
+
+
+@app.post("/devices/{device_id}/request-status")
+async def request_status(device_id: str):
+
+    payload_bytes = DownlinkEncoder.encode_request_status()
+    payload_b64 = base64.b64encode(payload_bytes).decode()
+
+    DataStore.save_downlink_command(
+        device_id=device_id,
+        cmd=payload_bytes[0],
+        target=payload_bytes[1],
+        length=payload_bytes[2],
+        payload_b64=payload_b64,
+        status="queued"
+    )
+
+    mqtt_service.send_downlink(device_id, payload_b64)
+
+    return {"status": "queued"}
+
+@app.get("/devices/{device_id}/downlinks")
+def get_downlinks(device_id: str, limit: int = 50):
+    return DataStore.get_device_downlinks(device_id, limit)
+
 
 register_pages()
 
