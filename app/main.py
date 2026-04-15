@@ -12,6 +12,8 @@ from app.downlink_encoder import DownlinkEncoder
 import uvicorn
 import base64
 
+
+
 mqtt_service = MQTTClient(on_uplink=UplinkHandler.handle_uplink)
 
 @asynccontextmanager
@@ -79,17 +81,11 @@ async def device_last_seen(device_id: str):
 
 
 #DOWNLINK ROUTES 
-@app.post("/devices/{device_id}/interval/{sensor_name}")
-async def set_interval(device_id: str, sensor_name: str, req: IntervalRequest):
 
-    sensor_id = DownlinkEncoder.get_sensor_id(sensor_name)
-
-    interval_minutes = req.interval_minutes
-
-    payload_bytes = DownlinkEncoder.encode_set_interval(sensor_id, interval_minutes)
+#helper to send commands 
+def send_command(device_id: str, payload_bytes: bytes):
     payload_b64 = base64.b64encode(payload_bytes).decode()
 
-    #save to DB 
     DataStore.save_downlink_command(
         device_id=device_id,
         cmd=payload_bytes[0],
@@ -101,27 +97,90 @@ async def set_interval(device_id: str, sensor_name: str, req: IntervalRequest):
 
     mqtt_service.send_downlink(device_id, payload_b64)
 
-    return {"status": "queued"}
+    return payload_b64
 
 
-@app.post("/devices/{device_id}/request-status")
+@app.post("/devices/{device_id}/interval/{sensor}")
+async def set_interval(device_id: str, sensor: str, interval_minutes: int):
+
+    sensor_id = DownlinkEncoder.get_sensor_id(sensor)
+
+    payload = DownlinkEncoder.encode_set_interval(sensor_id, interval_minutes)
+
+    send_command(device_id, payload)
+
+    return {
+        "status": "queued",
+        "sensor": sensor,
+        "interval_minutes": interval_minutes
+    }
+
+
+
+@app.post("/devices/{device_id}/status/request")
 async def request_status(device_id: str):
 
-    payload_bytes = DownlinkEncoder.encode_request_status()
-    payload_b64 = base64.b64encode(payload_bytes).decode()
+    payload = DownlinkEncoder.encode_request_status()
 
-    DataStore.save_downlink_command(
-        device_id=device_id,
-        cmd=payload_bytes[0],
-        target=payload_bytes[1],
-        length=payload_bytes[2],
-        payload_b64=payload_b64,
-        status="queued"
-    )
+    send_command(device_id, payload)
 
-    mqtt_service.send_downlink(device_id, payload_b64)
+    return {
+        "status": "queued",
+        "command": "request_status"
+    }
 
-    return {"status": "queued"}
+
+@app.post("/devices/{device_id}/region/request")
+async def get_region(device_id: str):
+
+    payload = DownlinkEncoder.encode_get_region()
+
+    send_command(device_id, payload)
+
+    return {
+        "status": "queued",
+        "command": "get_region"
+    }
+
+
+
+REGION_MAP = {
+    "EU868": 1,
+    "US915": 2,
+    "AU915": 3,
+}
+
+@app.post("/devices/{device_id}/region/set")
+async def set_region(device_id: str, region: str):
+
+    region = region.upper()
+
+    if region not in REGION_MAP:
+        return {"error": f"Invalid region. Options: {list(REGION_MAP.keys())}"}
+
+    region_id = REGION_MAP[region]
+
+    payload = DownlinkEncoder.encode_set_region(region_id)
+
+    send_command(device_id, payload)
+
+    return {
+        "status": "queued",
+        "region": region
+    }
+
+@app.post("/devices/{device_id}/reset")
+async def reset_device(device_id: str):
+
+    payload = DownlinkEncoder.encode_reset()
+
+    send_command(device_id, payload)
+
+    return {
+        "status": "queued",
+        "command": "reset"
+    }
+
 
 
 
