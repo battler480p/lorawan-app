@@ -211,46 +211,41 @@ class DataStore:
         conn = cls._get_conn()
         cur = conn.cursor()
 
-
-        #select rows
-        #from table
-        #join subquery
-            #select max measured_at
-            #group by sensor_name
-            #ON
-            #AND?
-        
-
-
         query = """
-                SELECT r.device_id, r.sensor_name, r.value, r.unit, r.measured_at 
-                FROM sensor_readings r 
-                JOIN (
-                SELECT sensor_name, MAX(measured_at) as max_ts
+            SELECT device_id, sensor_name, value, unit, measured_at
+            FROM (
+                SELECT
+                    id,
+                    device_id,
+                    sensor_name,
+                    value,
+                    unit,
+                    measured_at,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY sensor_name
+                        ORDER BY measured_at DESC, id DESC
+                    ) AS rn
                 FROM sensor_readings
                 WHERE device_id = ?
-                GROUP BY sensor_name 
-                ) latest ON r.sensor_name = latest.sensor_name
-                AND r.measured_at = latest.max_ts
-                WHERE r.device_id = ?
-                """
-        
-        cur.execute(query, (device_id, device_id))
+            ) ranked
+            WHERE rn = 1
+            ORDER BY measured_at DESC
+        """
+
+        cur.execute(query, (device_id,))
         rows = cur.fetchall()
         conn.close()
 
-        
         return [
             SensorReading(
                 device_id=row["device_id"],
                 sensor_name=row["sensor_name"],
                 value=row["value"],
                 unit=row["unit"],
-                measured_at=row["measured_at"]
-            ) 
+                measured_at=row["measured_at"],
+            )
             for row in rows
         ]
-
 
     @classmethod
     def get_device_sensor_readings(cls, device_id: str, sensor_name: str, limit: int = 100):

@@ -4,7 +4,9 @@ class DownlinkEncoder:
     #COMMAND LIST
     CMD_SET_INTERVAL = 0x01 #set a sensor interval
     CMD_REQUEST_STATUS = 0x02 #send next uplink immediately 
-    #reset 
+    CMD_GET_REGION = 0x20 
+    CMD_SET_REGION = 0x21 #set lora region
+    CMD_RESET = 0x22 #reset board
 
     SENSOR_IDS = {
         "temperature": 0,
@@ -37,6 +39,33 @@ class DownlinkEncoder:
             0x00 #blank 
 
         ])
+    
+    @staticmethod
+    def encode_reset() -> bytes: 
+        return bytes([
+            DownlinkEncoder.CMD_RESET,
+            0x00, #blank
+            0x00 #blank 
+
+        ])
+    
+    @staticmethod 
+    def encode_get_region() -> bytes: 
+        return bytes([
+            DownlinkEncoder.CMD_GET_REGION,
+            0x00, #blank
+            0x00 #blank
+        ])
+
+    @staticmethod 
+    def encode_set_region(region: int) -> bytes:
+        return bytes([
+            DownlinkEncoder.CMD_SET_REGION,
+            0x00,   # target
+            0x01,   # length
+            region  # data
+        ])
+    
     
 
     @staticmethod

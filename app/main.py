@@ -10,6 +10,7 @@ from nicegui import ui
 from app.gui import register_pages
 from app.downlink_encoder import DownlinkEncoder
 import uvicorn
+import base64
 
 mqtt_service = MQTTClient(on_uplink=UplinkHandler.handle_uplink)
 
@@ -75,11 +76,9 @@ async def sensor_stats(device_id: str, sensor_name: str, start: datetime, end: d
 async def device_last_seen(device_id: str):
     return DataStore.get_device_last_seen(device_id)
 
-import base64
 
-from app.downlink_encoder import DownlinkEncoder
-import base64
 
+#DOWNLINK ROUTES 
 @app.post("/devices/{device_id}/interval/{sensor_name}")
 async def set_interval(device_id: str, sensor_name: str, req: IntervalRequest):
 
@@ -123,6 +122,8 @@ async def request_status(device_id: str):
     mqtt_service.send_downlink(device_id, payload_b64)
 
     return {"status": "queued"}
+
+
 
 @app.get("/devices/{device_id}/downlinks")
 def get_downlinks(device_id: str, limit: int = 50):
