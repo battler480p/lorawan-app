@@ -232,7 +232,7 @@ def register_pages() -> None:
                         {"name": "unit", "label": "Unit", "field": "unit"},
                     ],
                     rows=[],
-                    row_key="id",
+                    row_key="row_id",
                 ).classes("w-full")
 
         # -----------------------------
@@ -251,7 +251,11 @@ def register_pages() -> None:
         ui.timer(
             5.0,
             lambda: (
+                refresh_devices(),
+                refresh_sensors(),
+                refresh_stats(),
                 refresh_recent_readings(),
+                refresh_last_seen(),
                 refresh_chart(),
             )
             if selected_device_id["value"]
