@@ -177,7 +177,12 @@ def register_pages() -> None:
 
             # header card
             with ui.card().classes("w-full max-w-5xl"):
-                ui.label("Sensor Dashboard").classes("text-2xl font-bold")
+                with ui.row().classes("w-full justify-between items-center"):
+                    ui.label("Sensor Dashboard").classes("text-2xl font-bold")
+                    ui.button(
+                        "Config",
+                        on_click=lambda: ui.navigate.to("../docs"),
+                    ).props("outline")
 
                 with ui.row().classes("w-full items-end gap-4"):
 

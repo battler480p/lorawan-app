@@ -11,6 +11,7 @@ from app.gui import register_pages
 from app.downlink_encoder import DownlinkEncoder
 import uvicorn
 import base64
+from fastapi.responses import RedirectResponse
 
 
 
@@ -31,9 +32,8 @@ app = FastAPI(lifespan=lifespan)
 
 
 @app.get("/")
-
 async def root():
-    return {"message": "API and MQTT are both running!"}
+    return RedirectResponse(url="/gui")
 
 
 @app.get("/devices")
