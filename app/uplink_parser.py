@@ -12,8 +12,8 @@ class UplinkParser:
         "pressure_hpa": ("pressure", "hpa"),
         "wind_speed_mph": ("wind_speed", "mph"),
         "ir": ("infrared", "counts"),
-        "visible": ("visible_light", "counts"),
-        # "wind_vane_raw": ("")
+        "visible": ("visible_light", "lux"),
+        "wind_vane_angle": ("wind_direction", "deg"),
         "battery_mV": ("battery", "mV"),
        # "pressure": ("pressure", "hPa"),
        # "sunlight": ("sunlight", "lux"),
