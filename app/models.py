@@ -39,19 +39,7 @@ class SensorStats(BaseModel):
     end: datetime
 
 
-class DownlinkCommand(BaseModel):
-    """
-    internal model of a downlink command request
-    """
-    device_id: str
-    command: str 
-    params: Dict[str, Any]
-    requested_at: datetime
 
-# API input models 
-
-class IntervalRequest(BaseModel):
-    interval_minutes: int
 
 
 

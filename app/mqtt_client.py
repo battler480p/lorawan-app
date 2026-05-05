@@ -4,7 +4,7 @@ import base64
 import paho.mqtt.client as mqtt
 from dotenv import load_dotenv
 from typing import Callable, Optional
-from app.models import DownlinkCommand
+
 
 # load environment variables from .env
 load_dotenv()

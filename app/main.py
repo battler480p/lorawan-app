@@ -15,7 +15,6 @@ from fastapi import FastAPI
 from app.mqtt_client import MQTTClient
 from app.uplink_handler import UplinkHandler
 from app.datastore import DataStore
-from app.models import DownlinkCommand, IntervalRequest
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 from nicegui import app as nicegui_app
