@@ -1,29 +1,11 @@
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 from app.models import SensorReading, UplinkMessage
+from app.sensor_config import get_sensor_config
 
 
 
 class UplinkParser:
-    #current sensors, some are going to be changed, added or whatever! 
-    SENSORS = {
-        "temperature_c": ("temperature", "C"),
-        "humidity_percent": ("humidity", "%"),
-        "pressure_hpa": ("pressure", "hpa"),
-        "wind_speed_mph": ("wind_speed", "mph"),
-        "ir": ("infrared", "counts"),
-        "visible": ("visible_light", "lux"),
-        "wind_vane_angle": ("wind_direction", "deg"),
-        "battery_mV": ("battery", "mV"),
-       # "pressure": ("pressure", "hPa"),
-       # "sunlight": ("sunlight", "lux"),
-       # "wind_direction": ("wind_direction", "deg"),
-       # "wind_speed": ("wind_speed", "km/h"),
-       # "battery": ("battery", "mV"),
-
-    }
-
-
 
     @staticmethod
     def parse_uplink(raw_json) -> UplinkMessage | None:
@@ -32,7 +14,7 @@ class UplinkParser:
             um = raw_json["uplink_message"]
             fport = um["f_port"]
             b64_payload = um["frm_payload"]
-            decoded_payload = um.get("decoded_payload", {})
+            decoded_payload = um.get("decoded_payload") or {}
             received_at = raw_json.get("received_at") or um.get("received_at")
         except KeyError:
             return None
@@ -57,8 +39,9 @@ class UplinkParser:
             return []
         
         readings: list[SensorReading] = []
+        sensor_defs = get_sensor_config().get_reading_defs()
 
-        for key, (sensor_name, unit) in UplinkParser.SENSORS.items():
+        for key, (sensor_name, unit) in sensor_defs.items():
             if key in decoded:
                 reading = SensorReading(
                     device_id = uplink.device_id,
