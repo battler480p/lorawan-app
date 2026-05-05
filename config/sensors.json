@@ -1,0 +1,50 @@
+{
+  "sensors": {
+    "temperature_c": {
+      "name": "temperature",
+      "unit": "C",
+      "target_id": 0
+    },
+    "humidity_percent": {
+      "name": "humidity",
+      "unit": "%",
+      "target_id": 0
+    },
+    "pressure_hpa": {
+      "name": "pressure",
+      "unit": "hPa",
+      "target_id": 0
+    },
+    "wind_speed_mph": {
+      "name": "wind_speed",
+      "unit": "mph",
+      "target_id": 3
+    },
+    "ir": {
+      "name": "infrared",
+      "unit": "counts",
+      "target_id": 1
+    },
+    "visible": {
+      "name": "visible_light",
+      "unit": "lux",
+      "target_id": 1
+    },
+    "wind_vane_angle": {
+      "name": "wind_direction",
+      "unit": "deg",
+      "target_id": 2
+    },
+    "battery_mV": {
+      "name": "battery",
+      "unit": "mV",
+      "target_id": null
+    }
+  },
+
+  "regions": {
+    "EU868": 1,
+    "US915": 2,
+    "AU915": 3
+  }
+}
