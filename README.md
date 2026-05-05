@@ -66,6 +66,19 @@ Example:
 }
 ```
 
+After editing ```config/sensors.json``` restart the application because the config is cached when the app starts. 
+
+The special name ```all``` doesn't need to be in config because it is handled in code and maps to ```0xFF``` which tells the MCU to apply the command to all sensors. 
+
+## Adding a new sensor: 
+
+1. Confirm the field name in TTN's 'decoded_payload'
+2. Add a new entry to 'config/sensors.json'
+3. Set the normalized 'name' 
+4. Set the display/storage 'unit' 
+5. Set 'target_id' if MCU supports interval downlinks for that sensor. Use 'null' if not. 
+6. Restart the application 
+
 
 
 ## Running the Server 
