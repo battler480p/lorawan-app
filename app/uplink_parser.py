@@ -9,6 +9,18 @@ class UplinkParser:
 
     @staticmethod
     def parse_uplink(raw_json) -> UplinkMessage | None:
+        """
+        parse raw TTN JSON into an UplinkMessage
+
+        Args: 
+            raw_json: raw uplink JSON payload from TTN 
+
+        Returns: 
+            UplinkMessage if the payload has the expected TTN structure,
+            otherwise None
+        
+        """
+
         try: 
             device_id = raw_json["end_device_ids"]["device_id"]
             um = raw_json["uplink_message"]
@@ -32,6 +44,20 @@ class UplinkParser:
     
     @staticmethod
     def to_readings(uplink) -> list[SensorReading]:
+        """
+        convert an UplinkMessage into normalized SensorReading objects. 
+
+        only decoded payload keys listed in config/sensors.json are converted.
+        unknown decoded fields are ignored. 
+
+        Args:
+            uplink: parsed UplinkMessage containing payload data.
+        
+        Returns:
+            List of SensorReading objects. empty list if no configured fields exist. 
+        
+        
+        """
         decoded = uplink.decoded
 
 
@@ -58,6 +84,16 @@ class UplinkParser:
 
     @staticmethod
     def check_errors(decoded_payload):
+        """
+        Check decoded payload for decoder or packet error markers.
+
+        Args: 
+            decoded_payload: dictionary from TTN decoded_payload. 
+
+        Returns: 
+            Decode status string if an error is found, otherwise None. 
+        
+        """
        
         if "error" in decoded_payload:
             return "decoder_error"

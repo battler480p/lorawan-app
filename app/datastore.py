@@ -10,6 +10,14 @@ import json
 
 
 class DataStore:
+    """
+    database layer for SQLite.
+
+    Tables: 
+        sensor_readings: parsed sensor values used by the API and dashboard
+        raw_payloads: raw TTN payloads plus decode status for debugging
+        downlink_commands: history of downlink payloads sent to devices. 
+    """
 
     DB_PATH: Path = Path("data.db")
    
@@ -22,6 +30,9 @@ class DataStore:
     
     @classmethod
     def init_db(cls) -> None: 
+        """
+        create required SQLite tables if they do not already exist.
+        """
         conn = DataStore._get_conn()
         cur = conn.cursor()
         cur.execute("""
@@ -62,6 +73,9 @@ class DataStore:
    
     @classmethod
     def save_raw_only(cls, decode_status, raw_json, device_id=None, received_at=None, payload_b64=None):
+        """
+        Save raw TTN paylaod data and decode status for debugging/audit history
+        """
         conn = cls._get_conn()
         cur = conn.cursor()
 
@@ -104,6 +118,9 @@ class DataStore:
 
     @classmethod
     def save_readings(cls, readings: list[SensorReading]) -> None:
+        """
+        insert parsed sensor readings into the sensor_readings table
+        """
         conn = cls._get_conn()
         cur = conn.cursor()
 
@@ -126,6 +143,9 @@ class DataStore:
 
     @classmethod
     def get_devices(cls):
+        """
+        return list of known devices 
+        """
         conn = cls._get_conn()
         cur = conn.cursor()
 
@@ -146,6 +166,16 @@ class DataStore:
     
     @classmethod
     def get_device_readings(cls, device_id: str, limit: int = 100) -> list[SensorReading]:
+        """
+        return recent sensor readings for one device, newest first 
+
+        Args: 
+            device_id: device id to query 
+            limit: max number of readings to return 
+
+        Returns:
+            List of SensorReading objects
+        """
 
         conn = cls._get_conn()
         cur = conn.cursor()
@@ -180,6 +210,16 @@ class DataStore:
 
     @classmethod
     def get_device_raw_payloads(cls, device_id: str, limit: int = 50) -> list[dict]:
+        """
+        query raw payload table for one device 
+
+        Args: 
+            device_id: device id to query
+            limit: maximum number of raw payload records to return 
+
+        Returns: 
+            List of dictionaries containing raw JSON, decode status, timestamps, and base64 payload data 
+        """
         conn = cls._get_conn()
         cur = conn.cursor()
 
@@ -208,6 +248,10 @@ class DataStore:
     
     @classmethod
     def get_recent_device_readings(cls, device_id: str) -> list[SensorReading]:
+        """
+        return the most recent readings for each sensor on one device 
+        this is used by the dashboards recent readings table 
+        """
         conn = cls._get_conn()
         cur = conn.cursor()
 
@@ -249,6 +293,15 @@ class DataStore:
 
     @classmethod
     def get_device_sensor_readings(cls, device_id: str, sensor_name: str, limit: int = 100):
+            """
+            return readings for one sensor on one device, newest first 
+
+            Args: 
+                device_id: device id to query 
+                sensor_name: normalized sensor name
+                limit: number of readings to return 
+
+            """
             conn = cls._get_conn()
             cur = conn.cursor()
             query = """
@@ -282,6 +335,19 @@ class DataStore:
     
     @classmethod 
     def get_device_sensor_readings_since(cls, device_id: str, sensor_name: str, since):
+            """
+            return readings for one sensor since a given timestamp.
+
+            args: 
+                device_id: device id to query 
+                sensor_name: normalized sensor name
+                since: starting timestamp as a datetime or iso timestamp string
+
+            Returns: 
+                list of SensorReading objects ordered oldest to newest
+            
+            """
+
             conn = cls._get_conn()
             cur = conn.cursor()
             query = """
@@ -314,6 +380,18 @@ class DataStore:
 
     @classmethod 
     def get_device_readings_between(cls, device_id: str, start: datetime, end: datetime) -> list[SensorReading]:
+         """
+         return all sensor readings for one device between two timestamps 
+
+         Args: 
+            device_id: device id to query
+            start: start of range
+            end: end of range 
+
+        Returns: 
+            List of SensorReading objects ordered oldest to newest 
+         """
+         
          conn = cls._get_conn()
          cur = conn.cursor()
          query = """
@@ -343,6 +421,18 @@ class DataStore:
 
     @classmethod 
     def get_device_singlular_sensor_readings_between(cls, device_id: str, sensor_name: str, start: datetime, end: datetime) -> list[SensorReading]:
+         """
+         return readings for one sensor on one device between two timestamps
+
+        Args:
+            device_id: device id to query
+            sensor_name: normalized sensor name
+            start: start of time range 
+            end: end of time range 
+
+        Returns:
+            List of SensorReading objects ordered oldest to newest
+         """
          conn = cls._get_conn()
          cur = conn.cursor()
          query = """
@@ -374,6 +464,18 @@ class DataStore:
 
     @classmethod 
     def get_sensor_stats(cls, device_id: str, sensor_name: str, start:datetime, end:datetime):
+         """
+         returns aggregrate statistics for one sensor over a time range 
+         
+         Args: 
+            device_id: device to query 
+            sensor_name: normalized sensor name 
+            start: start of time range
+            end: end of time range
+
+        Returns: 
+            SensorStats object, or none if no readings exist in the range
+         """
          conn = cls._get_conn()
          cur = conn.cursor()
          query = """
@@ -411,6 +513,12 @@ class DataStore:
     
     @classmethod
     def get_device_last_seen(cls, device_id: str) -> datetime | None:
+         """
+         return timestamp of the latest sensor reading for one device
+         
+         returns: 
+            datetime of the latest reading, or none if device has no readings 
+         """
          conn = cls._get_conn()
          cur = conn.cursor()
          query = """
@@ -429,6 +537,10 @@ class DataStore:
     
     @classmethod
     def get_device_sensors(cls, device_id) -> list[str]:
+         """
+         Return sensor names that have stored readings for one device 
+         
+         """
          conn = cls._get_conn()
          cur = conn.cursor()
          query = """
@@ -448,6 +560,18 @@ class DataStore:
     
     @classmethod
     def save_downlink_command(cls, device_id, cmd, target, length, payload_b64, status="queued"):
+        """
+        Save a downlink command before publishing to TTN
+
+        Args: 
+            device_id: device id receiving hte downlink 
+            cmd: one byte command id 
+            target: one byte target sensor/subsystem id 
+            length: number of bytes in the payload data section
+            payload_b64: base64 encoded downlink payload sent to TTN
+            status: current command status. defaults to 'queued' 
+        
+        """
         conn = cls._get_conn()
         cur = conn.cursor()
 
@@ -469,6 +593,17 @@ class DataStore:
 
     @classmethod
     def get_device_downlinks(cls, device_id: str, limit: int = 50):
+        """
+        return recent downlink command history for one device 
+
+        args:
+            device_id: device id to query
+            limit: max number of downlink records to show 
+
+        Returns: 
+            list of dictionaries describing queued/sent downlink payloads 
+        
+        """
         conn = cls._get_conn()
         cur = conn.cursor()
 

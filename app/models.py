@@ -4,6 +4,9 @@ from typing import Optional, Dict, Any, List
 
 #Internal models 
 class UplinkMessage(BaseModel):
+    """
+    parsed representation of one TTN uplink message
+    """
     device_id: str 
     fport: int
     decoded: Optional[Dict[str, Any]] = None
@@ -13,6 +16,9 @@ class UplinkMessage(BaseModel):
 
 
 class SensorReading(BaseModel):
+    """
+    one normalized sensor value stored in SQLite and returned by API routes 
+    """
     device_id: str
     sensor_name: str
     value: float
@@ -20,6 +26,9 @@ class SensorReading(BaseModel):
     measured_at: datetime
 
 class SensorStats(BaseModel):
+    """
+    aggregate min, max, average, and count for one sensor over a time range
+    """
     device_id: str
     sensor_name: str
     min: float
@@ -31,6 +40,9 @@ class SensorStats(BaseModel):
 
 
 class DownlinkCommand(BaseModel):
+    """
+    internal model of a downlink command request
+    """
     device_id: str
     command: str 
     params: Dict[str, Any]

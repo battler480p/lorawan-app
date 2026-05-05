@@ -6,9 +6,28 @@ from app.datastore import DataStore
 
 
 class UplinkHandler: 
+    """
+    coordinates processing for incoming TTN uplinks. 
+    
+    """
 
     @staticmethod
     def handle_uplink(payload):
+        """
+        process one raw TTN uplink payload.
+
+        the handler always attempts to save the raw payload with a decode status. if the payload contains configured sensor fields, normalized
+        SensorReading objects are saved to the database. 
+
+        Args: 
+            payload: raw JSON dictionary received from TTN over MQTT
+        
+            Returns:
+                Decode status string, such as "ok", "ok_no_readings",
+                "decoder_error," "unknown_packet", or "invalid_shape".
+        
+        
+        """
         uplink = UplinkParser.parse_uplink(payload)
         if uplink is None:
             DataStore.save_raw_only(decode_status='invalid_shape', raw_json=payload)

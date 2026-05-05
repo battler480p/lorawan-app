@@ -1,13 +1,28 @@
+"""
+Sensor configuration loader 
+
+this module loads sensor and region mappings from config/sensors.json
+
+the config file: 
+- maps TTN decoded payload fields to normalized sensor names and units
+- mapping sensor names to MCU target IDS for downlink commands
+- maps LoRa region names to MCU region IDs
+"""
+
+
 import json
 from pathlib import Path
 from functools import lru_cache
 from typing import Any
 
-
+#path to sensor config file
 CONFIG_PATH = Path("config/sensors.json")
 
 
 class SensorConfig:
+    """
+    wrapper around the sensor config JSON file 
+    """
     def __init__(self, data: dict[str, Any]):
         self.data = data
         self.sensors = data.get("sensors", {})
@@ -27,6 +42,21 @@ class SensorConfig:
         }
 
     def get_sensor_id(self, sensor_name: str) -> int:
+        """
+        Return the MCU target ID for a normalized sensor name. 
+
+        The name 'all' maps to 0xFF, which tells the MCU to apply the command to every sensor
+
+        args: 
+            sensor_name: normalized sensor name, such as "temperature", or "all" 
+        
+        returns: 
+            MCU target ID for the sensor 
+
+
+        raises:
+            ValueError: if the sensor is unknown or does not support downlinks
+        """
         if sensor_name == "all":
             return 0xFF
 
@@ -44,6 +74,13 @@ class SensorConfig:
         raise ValueError(f"Unknown sensor: {sensor_name}")
 
     def get_region_id(self, region: str) -> int:
+        """
+        Return the current LoRA region set
+        
+        raises:
+            ValueError: if the region is invalid
+            
+        """
         region = region.upper()
 
         if region not in self.regions:

@@ -136,7 +136,7 @@ class DownlinkEncoder:
         ])
     
     
-
+    #simple wrapper for looking up MCU sensor target IDs
     @staticmethod
     def get_sensor_id(sensor_name: str) -> int:
         return get_sensor_config().get_sensor_id(sensor_name)

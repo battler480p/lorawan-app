@@ -4,9 +4,19 @@ from nicegui import ui
 
 
 def register_pages() -> None:
+    """
+    register NiceGUI pages.
+
+    Currently registers the dashboard at /gui/.
+    """
 
     @ui.page("/")
     def dashboard_page():
+        """
+        main sensor dashboard page
+
+        the page keeps selected device, selected sensor, and time range in local dictionaries so nested refresh callbacks can update them. 
+        """
 
         # -----------------------------
         # state
@@ -55,6 +65,9 @@ def register_pages() -> None:
             )
 
         def refresh_devices():
+            """
+            reload known devices from the database and update the dropdown
+            """
             devices = DataStore.get_devices()
             device_select.options = devices
 
@@ -63,6 +76,9 @@ def register_pages() -> None:
                 device_select.value = selected_device_id["value"]
 
         def refresh_last_seen():
+            """
+            reload sensors for the selected device and update the sensor dropdown. 
+            """
             device_id = selected_device_id["value"]
 
             if not device_id:
@@ -76,6 +92,10 @@ def register_pages() -> None:
             )
 
         def refresh_sensors():
+            """
+            update the trend chart for the selected device, sensor, and time range 
+            
+            """
             device_id = selected_device_id["value"]
 
             if not device_id:
@@ -92,6 +112,9 @@ def register_pages() -> None:
                 sensor_select.value = selected_sensor_name["value"]
 
         def refresh_recent_readings():
+            """
+            show the latest reading for each sensor the selected device 
+            """
             device_id = selected_device_id["value"]
 
             if not device_id:
