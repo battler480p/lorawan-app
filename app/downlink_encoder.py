@@ -1,4 +1,4 @@
-
+from app.sensor_config import get_sensor_config
 class DownlinkEncoder:
     """
     encodes downlink commands into binary payloads
@@ -14,19 +14,11 @@ class DownlinkEncoder:
     #COMMAND LIST
     CMD_SET_INTERVAL = 0x01 #set a sensor interval
     CMD_REQUEST_STATUS = 0x02 #send next uplink immediately 
+    CMD_SET_TIME = 0x03 #send unix time to mcu
     CMD_GET_REGION = 0x20 #request lora region 
     CMD_SET_REGION = 0x21 #set lora region
     CMD_RESET = 0x22 #reset board
 
-    SENSOR_IDS = {
-        "temperature": 0, #bme280
-        "humidity": 0,
-        "pressure": 0,
-        "visible": 1, #si115x
-        "ir": 1,
-        "wind_vane": 2,
-        "wind_speed": 3,
-    }
 
     @staticmethod
     def encode_set_interval(sensor_id: int, interval_minutes: int) -> bytes:
@@ -101,6 +93,27 @@ class DownlinkEncoder:
             0x00, #blank
             0x00 #blank
         ])
+    
+    @staticmethod
+    def encode_set_time(unix_time: int) -> bytes:
+        """
+        encode current unix time command.
+
+        payload format:
+        [0x03][0x00][0x04][unix time, 4 bytes, big-endian]
+
+
+        returns: bytes
+        """
+        return bytes([
+            DownlinkEncoder.CMD_SET_TIME,
+            0x00,
+            0x04,
+            (unix_time >> 24) & 0xFF,
+            (unix_time >> 16) & 0xFF,
+            (unix_time >> 8) & 0xFF,
+            unix_time & 0xFF,
+        ])
 
     @staticmethod 
     def encode_set_region(region: int) -> bytes:
@@ -110,7 +123,7 @@ class DownlinkEncoder:
         [0x21][0x00][0x01][region_id]
 
         args:
-        region (int): region id (mapped from REGION_MAP)
+        region (int): region id 
 
         returns:
         bytes
@@ -126,10 +139,4 @@ class DownlinkEncoder:
 
     @staticmethod
     def get_sensor_id(sensor_name: str) -> int:
-        if sensor_name == "all":
-            return 0xFF
-
-        if sensor_name not in DownlinkEncoder.SENSOR_IDS:
-            raise ValueError(f"Unknown sensor: {sensor_name}")
-
-        return DownlinkEncoder.SENSOR_IDS[sensor_name]
+        return get_sensor_config().get_sensor_id(sensor_name)
