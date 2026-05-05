@@ -12,6 +12,8 @@ from app.downlink_encoder import DownlinkEncoder
 import uvicorn
 import base64
 from fastapi.responses import RedirectResponse
+from app.sensor_config import get_sensor_config
+import time
 
 
 
@@ -20,6 +22,7 @@ mqtt_service = MQTTClient(on_uplink=UplinkHandler.handle_uplink)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     DataStore.init_db()
+    get_sensor_config()
     print("Starting MQTT Service...")
     mqtt_service.connect()
     yield
@@ -102,8 +105,10 @@ def send_command(device_id: str, payload_bytes: bytes):
 
 @app.post("/devices/{device_id}/interval/{sensor}")
 async def set_interval(device_id: str, sensor: str, interval_minutes: int):
-
-    sensor_id = DownlinkEncoder.get_sensor_id(sensor)
+    try:
+        sensor_id = DownlinkEncoder.get_sensor_id(sensor)
+    except ValueError as e:
+        return {"error": str(e)}
 
     payload = DownlinkEncoder.encode_set_interval(sensor_id, interval_minutes)
 
@@ -144,21 +149,13 @@ async def get_region(device_id: str):
 
 
 
-REGION_MAP = {
-    "EU868": 1,
-    "US915": 2,
-    "AU915": 3,
-}
 
 @app.post("/devices/{device_id}/region/set")
 async def set_region(device_id: str, region: str):
-
-    region = region.upper()
-
-    if region not in REGION_MAP:
-        return {"error": f"Invalid region. Options: {list(REGION_MAP.keys())}"}
-
-    region_id = REGION_MAP[region]
+    try:
+        region_id = get_sensor_config().get_region_id(region)
+    except ValueError as e:
+        return {"error": str(e)}
 
     payload = DownlinkEncoder.encode_set_region(region_id)
 
@@ -166,8 +163,10 @@ async def set_region(device_id: str, region: str):
 
     return {
         "status": "queued",
-        "region": region
+        "region": region.upper()
     }
+
+
 
 @app.post("/devices/{device_id}/reset")
 async def reset_device(device_id: str):
@@ -181,7 +180,19 @@ async def reset_device(device_id: str):
         "command": "reset"
     }
 
+@app.post("/devices/{device_id}/time/set")
+async def set_device_time(device_id: str):
+    unix_time = int(time.time())
 
+    payload = DownlinkEncoder.encode_set_time(unix_time)
+
+    send_command(device_id, payload)
+
+    return {
+        "status": "queued",
+        "command": "set_time",
+        "unix_time": unix_time
+    }
 
 
 @app.get("/devices/{device_id}/downlinks")
@@ -202,4 +213,4 @@ ui.run_with(
 
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, log_level="info", reload=True)
+    uvicorn.run("app.main:app", host="127.0.0.1", port=8000, log_level="info", reload=True)
