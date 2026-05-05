@@ -58,7 +58,10 @@ class MQTTClient:
 
         # if app provided a handler, forward message
         if self.on_uplink:
-            self.on_uplink(payload)
+            try:
+                self.on_uplink(payload)
+            except Exception as e: 
+                print("[MQTT] Error while handling uplink:", repr(e))
         else:
             print(json.dumps(payload, indent=2))
 
